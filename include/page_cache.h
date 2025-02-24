@@ -12,6 +12,7 @@
 #endif
 
 
+
 #include "util.h"
 #include "host_util.h"
 #include "nvm_types.h"
@@ -1126,6 +1127,8 @@ uint64_t range_d_t<T>::acquire_page(const size_t pg, const uint32_t count, const
     access_cnt.fetch_add(count, simt::memory_order_relaxed);
     bool fail = true;
     unsigned int ns = 8;
+	uint32_t page_trans;
+	
     //bool miss = false;
     //T ret;
     uint64_t read_state,st,st_new;
@@ -1139,7 +1142,7 @@ uint64_t range_d_t<T>::acquire_page(const size_t pg, const uint32_t count, const
             st_new = pages[index].state.fetch_or(BUSY, simt::memory_order_acquire);
             if ((st_new & BUSY) == 0) {
                 
-                uint32_t page_trans = cache.find_slot(index, range_id, queue);
+                page_trans = cache.find_slot(index, range_id, queue);
                 //fill in
                 //uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
                 //uint32_t sm_id = get_smid();
@@ -1170,9 +1173,9 @@ uint64_t range_d_t<T>::acquire_page(const size_t pg, const uint32_t count, const
                 //new_state |= DIRTY;
                 //pages[index].state.fetch_or(new_state, simt::memory_order_relaxed);
                 pages[index].state.fetch_xor(DISABLE_BUSY_ENABLE_VALID, simt::memory_order_release);
+                fail = false;
                 return page_trans;
 
-                fail = false;
             }
 
             break;
@@ -1181,15 +1184,15 @@ uint64_t range_d_t<T>::acquire_page(const size_t pg, const uint32_t count, const
             if (write && ((read_state & DIRTY) == 0))
                 pages[index].state.fetch_or(DIRTY, simt::memory_order_relaxed);
             //uint32_t page_trans = pages[index].offset.load(simt::memory_order_acquire);
-            uint32_t page_trans = pages[index].offset;
+            page_trans = pages[index].offset;
             // while (cache.page_translation[global_page].load(simt::memory_order_acquire) != page_trans)
             //     __nanosleep(100);
             //hit_cnt.fetch_add(count, simt::memory_order_relaxed);
             hit_cnt.fetch_add(count, simt::memory_order_relaxed);
+            fail = false;
             return page_trans;
 
             //pages[index].fetch_sub(1, simt::memory_order_release);
-            fail = false;
 
             break;
         case NV_B:
@@ -1782,8 +1785,8 @@ uint32_t page_cache_d_t::find_slot(uint64_t address, uint64_t range_id, const ui
     uint64_t count = 0;
     uint32_t global_address =(uint32_t) ((address << n_ranges_bits) | range_id); //not elegant. but hack
     uint32_t page = 0;
-    unsigned int ns = 8;
-	uint64_t j = 0;
+//    unsigned int ns = 8;
+//	uint64_t j = 0;
     uint64_t expected_state = VALID;
     uint64_t new_expected_state = 0;
 
@@ -2000,6 +2003,9 @@ inline __device__ void enqueue_second(page_cache_d_t* pc, QueuePair* qp, const u
 
 }
 
+//TODO: BA: never got an answer on the purpose of enqueue second. Making compile option to prevent warnings
+//#define RD_ENQUEUE_SECOND
+
 inline __device__ void read_data(page_cache_d_t* pc, QueuePair* qp, const uint64_t starting_lba, const uint64_t n_blocks, const unsigned long long pc_entry) {
     //uint64_t starting_lba = starting_byte >> qp->block_size_log;
     //uint64_t rem_bytes = starting_byte & qp->block_size_minus_1;
@@ -2024,21 +2030,29 @@ inline __device__ void read_data(page_cache_d_t* pc, QueuePair* qp, const uint64
     nvm_cmd_rw_blks(&cmd, starting_lba, n_blocks);
     uint16_t sq_pos = sq_enqueue(&qp->sq, &cmd);
     uint32_t head, head_;
+#ifdef RD_ENQUEUE_SECOND
     uint64_t pc_pos;
     uint64_t pc_prev_head;
+#endif
+
 
     uint32_t cq_pos = cq_poll(&qp->cq, cid, &head, &head_);
 
     qp->cq.tail.fetch_add(1, simt::memory_order_acq_rel);
+#ifdef RD_ENQUEUE_SECOND
     pc_prev_head = pc->q_head->load(simt::memory_order_relaxed);
     pc_pos = pc->q_tail->fetch_add(1, simt::memory_order_acq_rel);
+#else
+	pc->q_tail->fetch_add(1, simt::memory_order_acq_rel);
+#endif
 
     cq_dequeue(&qp->cq, cq_pos, &qp->sq, head, head_);
     //sq_dequeue(&qp->sq, sq_pos);
 
+#ifdef RD_ENQUEUE_SECOND
+	enqueue_second(pc, qp, starting_lba, &cmd, cid, pc_pos, pc_prev_head);
+#endif
 
-    //enqueue_second(page_cache_d_t* pc, QueuePair* qp, const uint64_t starting_lba, nvm_cmd_t* cmd, const uint16_t cid, const uint64_t pc_pos, const uint64_t pc_prev_head)
-    //TODO: BA: never got an answer on this ..... enqueue_second(pc, qp, starting_lba, &cmd, cid, pc_pos, pc_prev_head);
 
 
 
@@ -2072,13 +2086,16 @@ inline __device__ void write_data(page_cache_d_t* pc, QueuePair* qp, const uint6
     nvm_cmd_rw_blks(&cmd, starting_lba, n_blocks);
     uint16_t sq_pos = sq_enqueue(&qp->sq, &cmd);
     uint32_t head, head_;
-    uint64_t pc_pos;
-    uint64_t pc_prev_head;
+//    uint64_t pc_pos;
+//    uint64_t pc_prev_head;
 
     uint32_t cq_pos = cq_poll(&qp->cq, cid, &head, &head_);
     qp->cq.tail.fetch_add(1, simt::memory_order_acq_rel);
-    pc_prev_head = pc->q_head->load(simt::memory_order_relaxed);
-    pc_pos = pc->q_tail->fetch_add(1, simt::memory_order_acq_rel);
+//    pc_prev_head = pc->q_head->load(simt::memory_order_relaxed);
+//    pc_pos = pc->q_tail->fetch_add(1, simt::memory_order_acq_rel);
+
+	pc->q_tail->fetch_add(1, simt::memory_order_acq_rel);
+
     cq_dequeue(&qp->cq, cq_pos, &qp->sq, head, head_);
     //sq_dequeue(&qp->sq, sq_pos);
 

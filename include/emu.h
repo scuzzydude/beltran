@@ -47,8 +47,8 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 
 #define BAM_EMU_MAX_QUEUES 1024
 
-
-#define BAM_EMU_COMPILE 
+//controls emulation compile and benchmark enablement
+//#define BAM_EMU_COMPILE 
 
 #define BAM_EMU_TARGET_DISABLE    0
 #define BAM_EMU_TARGET_ENABLE     0x00000001
