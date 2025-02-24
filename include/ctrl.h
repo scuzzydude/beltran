@@ -31,7 +31,7 @@
 #include <simt/atomic>
 
 #include "queue.h"
-
+#include "emu.h"
 
 #define MAX_QUEUES 1024
 
@@ -60,11 +60,17 @@ struct Controller
 
     void* d_ctrl_ptr;
     BufferPtr d_ctrl_buff;
+
+#ifdef BAM_EMU_COMPILE
+	bam_host_emulator *pEmu;
+	uint64_t        emulationTargetFlags;
+#endif
+
 #ifdef __DIS_CLUSTER__
     Controller(uint64_t controllerId, uint32_t nvmNamespace, uint32_t adapter, uint32_t segmentId);
 #endif
 
-    Controller(const char* path, uint32_t nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues);
+    Controller(const char* path, uint32_t nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget = BAM_EMU_TARGET_DISABLE);
 
     void reserveQueues();
 
@@ -145,33 +151,64 @@ Controller::Controller(uint64_t ctrl_id, uint32_t ns_id, uint32_t)
 
 
 
-inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues)
+inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget)
     : ctrl(nullptr)
     , aq_ref(nullptr)
     , deviceId(cudaDevice)
 {
-    int fd = open(path, O_RDWR);
-    if (fd < 0)
-    {
-        throw error(string("Failed to open descriptor: ") + strerror(errno));
-    }
+	unsigned int mmFlag = cudaHostRegisterIoMemory;
+#ifdef BAM_EMU_COMPILE
+	if(emulationTarget & BAM_EMU_TARGET_ENABLE)
+	{
+		emulationTargetFlags = emulationTarget;
+		ctrl = initializeEmulator(ns_id, cudaDevice, queueDepth, numQueues, &pEmu, emulationTarget);
 
-    // Get controller reference
-    int status = nvm_ctrl_init(&ctrl, fd);
-    if (!nvm_ok(status))
-    {
-        throw error(string("Failed to get controller reference: ") + nvm_strerror(status));
-    }
+		printf("Controller Init :BAM_EMU_TARGET_ENABLE pEmu = %p ctrl = %p numQueues = %d\n", pEmu, ctrl, numQueues);
 
-    // Create admin queue memory
-    aq_mem = createDma(ctrl, ctrl->page_size * 3);
+		ns.lba_data_size = 512;
+		n_cqs = numQueues;
+		n_sqs = numQueues;
+		mmFlag = cudaHostRegisterDefault;
+		
+	}	
+	else
+#endif
+	{
+    	int fd = open(path, O_RDWR);
+    	if (fd < 0)
+    	{
+        	throw error(string("Failed to open descriptor: ") + strerror(errno));
+    	}
 
-    initializeController(*this, ns_id);
-    cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, cudaHostRegisterIoMemory);
-    if (err != cudaSuccess)
-    {
-        throw error(string("Unexpected error while mapping IO memory (cudaHostRegister): ") + cudaGetErrorString(err));
-    }
+    	// Get controller reference
+    	int status = nvm_ctrl_init(&ctrl, fd);
+    	if (!nvm_ok(status))
+    	{
+        	throw error(string("Failed to get controller reference: ") + nvm_strerror(status));
+    	}
+		close(fd);
+
+	}
+
+	// Create admin queue memory
+	aq_mem = createDma(ctrl, ctrl->page_size * 3);
+	
+	initializeController(*this, ns_id);
+
+	printf("CALL cudaHOstRegister = %p, %p, %d\n", ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag );
+	
+	cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag);
+
+	printf("cudaHostRegister err = %d\n", err);
+
+
+	if (err != cudaSuccess)
+	{
+		throw error(string("Unexpected error while mapping IO memory (cudaHostRegister): ") + cudaGetErrorString(err));
+	}
+
+	
+
     queue_counter = 0;
     page_size = ctrl->page_size;
     blk_size = this->ns.lba_data_size;
@@ -179,23 +216,43 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     reserveQueues(MAX_QUEUES,MAX_QUEUES);
     n_qps = std::min(n_sqs, n_cqs);
     n_qps = std::min(n_qps, (uint16_t)numQueues);
-    printf("SQs: %d\tCQs: %d\tn_qps: %d\n", n_sqs, n_cqs, n_qps);
+    printf("SQs: %d\tCQs: %d\tn_qps: %d queueDepth = %d\n", n_sqs, n_cqs, n_qps, queueDepth);
     h_qps = (QueuePair**) malloc(sizeof(QueuePair)*n_qps);
     cuda_err_chk(cudaMalloc((void**)&d_qps, sizeof(QueuePair)*n_qps));
-    for (size_t i = 0; i < n_qps; i++) {
-        //printf("started creating qp\n");
+    for (size_t i = 0; i < n_qps; i++) 
+	{
+ //       printf("started creating qp\n");
         h_qps[i] = new QueuePair(ctrl, cudaDevice, ns, info, aq_ref, i+1, queueDepth);
-        //printf("finished creating qp\n");
+ //       printf("finished creating qp\n");
         cuda_err_chk(cudaMemcpy(d_qps+i, h_qps[i], sizeof(QueuePair), cudaMemcpyHostToDevice));
+ //       printf("finished copy QP Memory to device\n");
+
+#ifdef BAM_EMU_COMPILE
+		pEmu->tgt.queuePairs[i].cQ.db = h_qps[i]->cq.db;
+		pEmu->tgt.queuePairs[i].sQ.db = h_qps[i]->sq.db;
+
+		*h_qps[i]->cq.db = 0;
+		*h_qps[i]->sq.db = 0;
+		
+///		printf("(%d) cq.db = %p sq.sb = %p\n", i, pEmu->tgt.queuePairs[i].cQ.db, pEmu->tgt.queuePairs[i].sQ.db);
+#endif
     }
-    //printf("finished creating all qps\n");
+    printf("finished creating all qps\n");
 
-
-    close(fd);
-
+    
     d_ctrl_buff = createBuffer(sizeof(Controller), cudaDevice);
     d_ctrl_ptr = d_ctrl_buff.get();
     cuda_err_chk(cudaMemcpy(d_ctrl_ptr, this, sizeof(Controller), cudaMemcpyHostToDevice));
+
+#ifdef BAM_EMU_COMPILE
+#ifdef BAM_EMU_START_EMU_POST_Q_CONFIG
+#ifdef BAM_EMU_START_EMU_IN_APP_LAYER
+	printf("BAM_EMU_START_EMU_IN_APP_LAYER delaying start_emulation_target()\n");
+#else
+	start_emulation_target(pEmu);
+#endif	
+#endif
+#endif
 }
 
 
@@ -230,6 +287,13 @@ inline void Controller::reserveQueues(uint16_t numSubmissionQueues)
 
 inline void Controller::reserveQueues(uint16_t numSubs, uint16_t numCpls)
 {
+#ifdef BAM_EMU_COMPILE
+	if(BAM_EMU_TARGET_ENABLE & emulationTargetFlags)
+	{
+		//TODO: Admin implementation - TODO, when emulator handles admin, remove this
+		return;
+	}
+#endif
     int status = nvm_admin_request_num_queues(aq_ref, &numSubs, &numCpls);
     if (!nvm_ok(status))
     {

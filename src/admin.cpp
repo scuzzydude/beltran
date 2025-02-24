@@ -398,8 +398,15 @@ int nvm_admin_sq_create(nvm_aq_ref ref, nvm_queue_t* sq, const nvm_queue_t* cq, 
 
     memset(&command, 0, sizeof(command));
     memset(&completion, 0, sizeof(completion));
-    admin_sq_create(&command, &queue, cq, dma->ioaddrs[offset], need_prp);
-
+	if(ctrl->emulated)
+	{
+		admin_sq_create(&command, &queue, cq, (uint64_t)dma->vaddr, need_prp);
+	}
+	else
+	{
+		admin_sq_create(&command, &queue, cq, dma->ioaddrs[offset], need_prp);
+	}
+	
     err = nvm_raw_rpc(ref, &command, &completion);
     if (!nvm_ok(err))
     {

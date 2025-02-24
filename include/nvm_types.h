@@ -14,6 +14,7 @@
 #endif
 
 
+typedef void (*fnEmulatedRpcCallout)(void *pvCtrl, void* pvCmd, void *pvCpl);
 
 /* 
  * NVM controller handle.
@@ -25,10 +26,15 @@ typedef struct
 {
     size_t                  page_size;      // Memory page size used by the controller (MPS)
     uint8_t                 dstrd;          // Doorbell stride (in encoded form)
+    uint8_t                 emulated;       // Emulation (no DMA) flag
     uint64_t                timeout;        // Controller timeout in milliseconds (TO)
     uint32_t                max_qs;         // Maximum queue entries supported (MQES)
     size_t                  mm_size;        // Size of memory-mapped region
     volatile void*          mm_ptr;         // Memory-mapped pointer to BAR0 of the physical device
+
+	//TODO: These are temporary, evenually, RPC will talk to Emulator for Admin, this is just a shortcut
+	fnEmulatedRpcCallout    fnEmuCallout;
+	void                    *pvEmu;
 } nvm_ctrl_t;
 
 

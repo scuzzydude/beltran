@@ -19,6 +19,7 @@
 #include <iostream>
 #include <cmath>
 #include "util.h"
+#include "emu.h"
 
 using error = std::runtime_error;
 using std::string;
@@ -49,6 +50,13 @@ struct QueuePair
     BufferPtr           cq_pos_locks;
     //BufferPtr           cq_clean_cid;
 
+	bool sq_need_prp;  
+	bool cq_need_prp;  
+			
+	size_t sq_mem_size; 
+	size_t cq_mem_size;
+	uint64_t cq_size;
+	uint64_t sq_size;
 
 
 
@@ -86,32 +94,38 @@ struct QueuePair
 
 
 
-    inline QueuePair( const nvm_ctrl_t* ctrl, const uint32_t cudaDevice, const struct nvm_ns_info ns, const struct nvm_ctrl_info info, nvm_aq_ref& aq_ref, const uint16_t qp_id, const uint64_t queueDepth)
+	inline void queue_pair_prepare(const nvm_ctrl_t* ctrl, const uint32_t cudaDevice, const struct nvm_ns_info ns, const struct nvm_ctrl_info info, const uint16_t qp_id, const uint64_t queueDepth)
     {
-        //this->this = (QueuePairThis*) malloc(sizeof(QueuePairThis));
+//		 printf("queue_pair_prepare 0 mm_ptr = %p\n", ctrl->mm_ptr);
+		
+		uint64_t cap = ((volatile uint64_t*) ctrl->mm_ptr)[0];
+		  bool cqr = (cap & 0x0000000000010000) == 0x0000000000010000;
+		  //uint64_t sq_size = 16;
+		  //uint64_t cq_size = 16;
 
+		 
+		  
+		  
+		  uint64_t sq_size = (cqr) ?
+			  ((MAX_SQ_ENTRIES_64K <= ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) )) ? MAX_SQ_ENTRIES_64K :  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) ) ) :
+			  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) );
+		  uint64_t cq_size = (cqr) ?
+			  ((MAX_CQ_ENTRIES_64K <= ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) )) ? MAX_CQ_ENTRIES_64K :  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) ) ) :
+			  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) );
 
-    //    std::cout << "HERE\n";
-        uint64_t cap = ((volatile uint64_t*) ctrl->mm_ptr)[0];
-        bool cqr = (cap & 0x0000000000010000) == 0x0000000000010000;
-        //uint64_t sq_size = 16;
-        //uint64_t cq_size = 16;
+//		  printf("queue_pair_prepare sq_size = %ld cq_size = %ld, mm_ptr[0] = %04x\n", sq_size, cq_size, ((volatile uint16_t*) ctrl->mm_ptr)[0]);
+		  
+		  sq_size = std::min(queueDepth, sq_size);
+		  cq_size = std::min(queueDepth, cq_size);
 
-        uint64_t sq_size = (cqr) ?
-            ((MAX_SQ_ENTRIES_64K <= ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) )) ? MAX_SQ_ENTRIES_64K :  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) ) ) :
-            ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) );
-        uint64_t cq_size = (cqr) ?
-            ((MAX_CQ_ENTRIES_64K <= ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) )) ? MAX_CQ_ENTRIES_64K :  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) ) ) :
-            ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) );
-        sq_size = std::min(queueDepth, sq_size);
-        cq_size = std::min(queueDepth, cq_size);
-
-  //      printf("sq_size: %ld\tcq_size: %ld\n", sq_size, cq_size);
-        bool sq_need_prp = false;//(!cqr) || (sq_size > MAX_SQ_ENTRIES_64K);
-        bool cq_need_prp = false;// (!cqr) || (cq_size > MAX_CQ_ENTRIES_64K);
-
-        size_t sq_mem_size =  sq_size * sizeof(nvm_cmd_t) + sq_need_prp*(64*1024);
-        size_t cq_mem_size =  cq_size * sizeof(nvm_cpl_t) + cq_need_prp*(64*1024);
+		  this->cq_size = cq_size;
+		  this->sq_size = sq_size;
+		  
+		  sq_need_prp = false;//(!cqr) || (sq_size > MAX_SQ_ENTRIES_64K);
+		  cq_need_prp = false;// (!cqr) || (cq_size > MAX_CQ_ENTRIES_64K);
+		
+		  sq_mem_size =	sq_size * sizeof(nvm_cmd_t) + sq_need_prp*(64*1024);
+		  cq_mem_size =	cq_size * sizeof(nvm_cpl_t) + cq_need_prp*(64*1024);
 
 //        std::cout << sq_size << "\t" << sq_mem_size << std::endl;
         //size_t queueMemSize = ctrl.info.page_size * 2;
@@ -176,8 +190,13 @@ struct QueuePair
             free(cpu_vaddrs);
         }
       //  std::cout << "before nvm_admin_cq_create\n";
-        // Create completion queue
-        // (nvm_aq_ref ref, nvm_queue_t* cq, uint16_t id, const nvm_dma_t* dma, size_t offset, size_t qs, bool need_prp = false)
+	}
+
+	
+    inline QueuePair( const nvm_ctrl_t* ctrl, const uint32_t cudaDevice, const struct nvm_ns_info ns, const struct nvm_ctrl_info info, nvm_aq_ref& aq_ref, const uint16_t qp_id, const uint64_t queueDepth)
+    {
+		queue_pair_prepare(ctrl,cudaDevice, ns, info, qp_id, queueDepth);
+
         int status = nvm_admin_cq_create(aq_ref, &this->cq, qp_id, this->cq_mem.get(), 0, cq_size, cq_need_prp);
         if (!nvm_ok(status))
         {
@@ -187,6 +206,8 @@ struct QueuePair
 
         // Get a valid device pointer for CQ doorbell
         void* devicePtr = nullptr;
+		//printf("QP CQ post mm_ptr = %p db = %p DIF  = %p\n", ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr));
+
         cudaError_t err = cudaHostGetDevicePointer(&devicePtr, (void*) this->cq.db, 0);
         if (err != cudaSuccess)
         {
@@ -194,8 +215,14 @@ struct QueuePair
         }
         this->cq.db = (volatile uint32_t*) devicePtr;
 
+		//printf("DEVICE cq.db = %p\n", this->cq.db);
+		
+			
+
         // Create submission queue
         //  nvm_admin_sq_create(nvm_aq_ref ref, nvm_queue_t* sq, const nvm_queue_t* cq, uint16_t id, const nvm_dma_t* dma, size_t offset, size_t qs, bool need_prp = false)
+        //printf("CALL nvm_admin_sq_create() sq_size =%ld\n", sq_size);
+		
         status = nvm_admin_sq_create(aq_ref, &this->sq, &this->cq, qp_id, this->sq_mem.get(), 0, sq_size, sq_need_prp);
         if (!nvm_ok(status))
         {
@@ -210,10 +237,13 @@ struct QueuePair
             throw error(string("Failed to get device pointer") + cudaGetErrorString(err));
         }
         this->sq.db = (volatile uint32_t*) devicePtr;
-//        std::cout << "Finish Making Queue\n";
+        //std::cout << "Finish Making Queue\n";
 
         init_gpu_specific_struct(cudaDevice);
-       // std::cout << "in preparequeuepair: " << std::hex << this->sq.cid << std::endl;
+
+		//printf("init_gpu_specific_struct() RETURN \n");
+				
+
         return;
 
 

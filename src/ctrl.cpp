@@ -193,7 +193,8 @@ int _nvm_ctrl_init(nvm_ctrl_t** handle, struct device* dev, const struct device_
     ctrl->dstrd = CAP$DSTRD(ctrl->mm_ptr);
     ctrl->timeout = CAP$TO(ctrl->mm_ptr) * 500UL;
     ctrl->max_qs = CAP$MQES(ctrl->mm_ptr) + 1; // CAP.MQES is 0's based
-
+	ctrl->emulated = 0;
+	
     *handle = ctrl;
 
     return 0;

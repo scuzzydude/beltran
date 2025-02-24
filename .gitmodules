@@ -1,3 +1,9 @@
 [submodule "include/freestanding"]
 	path = include/freestanding
 	url = https://github.com/ogiroux/freestanding
+[submodule "benchmarks/astros/liburing"]
+	path = benchmarks/astros/liburing
+	url = https://github.com/axboe/liburing
+[submodule "benchmarks/astros/libaio"]
+	path = benchmarks/astros/libaio
+	url = https://github.com/anlongfei/libaio

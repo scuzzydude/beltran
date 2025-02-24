@@ -45,6 +45,21 @@ static void release_device(struct device* dev, volatile void* mm_ptr, size_t mm_
 
 
 
+static int emu_ioctl_map(const struct device* dev, const struct va_range* va, uint64_t* ioaddrs)
+{
+	int i;
+	
+//	dprintf("emu_ioctl_map(%d)\n", va->n_pages);	
+
+	for(i = 0; i < va->n_pages; i++)
+	{
+		ioaddrs[i] = (uint64_t) ((uint64_t)va->vaddr + (uint64_t)(i * va->page_size))	;
+		//dprintf("emu_ioctl_map ioaddrs[%d] = %p\n", i, ioaddrs[i]);
+		
+	}
+
+	return 0;
+}
 /*
  * Call kernel module ioctl and map memory for DMA.
  */
@@ -87,6 +102,11 @@ static int ioctl_map(const struct device* dev, const struct va_range* va, uint64
     return 0;
 }
 
+static void emu_ioctl_unmap(const struct device* dev, const struct va_range* va)
+{
+	
+//	dprintf("emu_ioctl_unmap()\n");	
+}
 
 
 /*
@@ -105,17 +125,33 @@ static void ioctl_unmap(const struct device* dev, const struct va_range* va)
     }
 }
 
-
-
-int nvm_ctrl_init(nvm_ctrl_t** ctrl, int filedes)
+const struct device_ops nv_ops = 
 {
-    int err;
-    struct device* dev;
-    const struct device_ops ops = {
         .release_device = &release_device,
         .map_range = &ioctl_map,
         .unmap_range = &ioctl_unmap,
-    };
+};
+
+
+const struct device_ops emu_ops = 
+{
+        .release_device = &release_device,
+        .map_range = &emu_ioctl_map,
+        .unmap_range = &emu_ioctl_unmap,
+};
+
+int nvm_ctrl_init(nvm_ctrl_t** ctrl, int filedes, int emulated)
+{
+    int err;
+    struct device* dev;
+	const struct device_ops *pOps;
+
+	pOps = &nv_ops;
+
+	if(emulated)
+	{
+		pOps = &emu_ops;
+	}
 
     *ctrl = NULL;
     dev = (struct device*) malloc(sizeof(struct device));
@@ -152,7 +188,7 @@ int nvm_ctrl_init(nvm_ctrl_t** ctrl, int filedes)
         return errno;
     }
 
-    err = _nvm_ctrl_init(ctrl, dev, &ops, DEVICE_TYPE_IOCTL, mm_ptr, mm_size);
+    err = _nvm_ctrl_init(ctrl, dev, pOps, DEVICE_TYPE_IOCTL, mm_ptr, mm_size);
     if (err != 0)
     {
         release_device(dev, mm_ptr, mm_size);

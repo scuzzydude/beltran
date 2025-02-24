@@ -1,0 +1,36 @@
+echo "UNBIND START"
+sh ./unbind.sh
+echo "UNBIND DONE - lsblk"
+lsblk
+pushd .
+nvidia-smi
+cd ../build/module
+make unload
+echo "UNLOADED"
+make load
+echo "LOADED"
+popd
+#WORKAROUND
+declare -x LD_BIND_NOW=1
+#./astros --ioengine=bam
+#gdb --args ./astros --ioengine=bam
+cp ../build/bin/nvm-block-bench .
+#./nvm-block-bench --threads=12 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=8 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=128 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=512 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=3072 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#PASS./nvm-block-bench --threads=1024 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=256 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=128 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=64  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=16 --blk_size=8 --reqs=1 --pages=262144 --queue_depth=8  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=8 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#PASS ./nvm-block-bench --threads=256 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=512  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=8192 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=2048 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=4096 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=32 --random=true
+#./nvm-block-bench --threads=32768 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=32 --random=true
+#./nvm-block-bench --threads=32768 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=128 --random=true
+./nvm-block-bench --threads=65536 --blk_size=64 --reqs=1 --pages=262144 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=256 --random=true
+nvidia-smi
+ 

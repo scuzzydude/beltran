@@ -1,0 +1,443 @@
+#include "astros.h"
+
+
+
+int astros_winaio_init(void *pvEngine)
+
+{
+
+    return 0;
+}
+
+int astros_winaio_free(void *pvEngine)
+{
+    int error = 0;
+
+    return error;
+
+}
+
+
+int astros_winaio_reset(void *pvEngine)
+{
+
+    return 0;
+}
+
+int astros_winaio_register(void *pvEngine)
+{
+	return 0;
+}
+
+void astros_overlappedCompletionRoutine(DWORD dwErrorCode,DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)
+{
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_INFO);
+	ccb *pCCB = lpOverlapped->hEvent;
+		
+	ASTROS_DBG_PRINT(verbose, "astros_overlappedCompletionRoutine() pCCB=%px\n", pCCB);
+
+
+
+}
+
+int astros_winaio_setup_ccb(void *pvEngine, ccb *pCCB)
+{
+    int error = 0;
+    aioengine *pEngine = pvEngine;
+	LPOVERLAPPED pOverlapped;
+	BOOL bErr;
+#if 0	
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_INFO);
+	
+	pOverlapped = &pCCB->engine_scratch.winaio.stOverlapped;
+
+
+	if(astros_is_fixed_load(pEngine))
+	{
+		astros_ccb_set_fixed_load(pCCB, pEngine);
+	}
+
+
+	pCCB->pfnCCB(pCCB);
+	
+
+    ASTROS_DBG_PRINT(verbose, "astros_winaio_setup_ccb(%p) [%d] op = %d pSqe = %p fd = %d  io_size = %d\n", 
+		pCCB , pCCB->idx, pCCB->op, NULL, pCCB->pTarget->fd,  pCCB->io_size );
+
+	pOverlapped->Offset = pCCB->offset;
+	pOverlapped->hEvent = pCCB;
+
+	ASTROS_INC_ATOMIC(&pCCB->pTarget->atomic_qd);
+	
+    ASTROS_DBG_PRINT(verbose, "astros_winaio_setup_ccb(%p) [%d] op = 0x%08x atomic_qd = %d\n", pCCB , pCCB->idx, pCCB->op, ASTROS_GET_ATOMIC(pCCB->pTarget->atomic_qd));
+
+	if(pEngine->bLatency)
+	{
+		pCCB->start_ns = ASTROS_PS_HRCLK_GET();
+		astros_batter_calculate_inter_latency(pCCB);
+ 	}
+
+    if(ASTROS_CCB_OP_READ == pCCB->op)
+    {
+		ASTROS_DBG_PRINT(verbose, "astros_winaio_setup_ccb READ_FIXED(%p) [%d] pSqe=%p fd=%d pData=%p, io_size=%d offset=%d iov_idx=%d\n", pCCB , pCCB->idx, NULL, pCCB->pTarget->fd, pCCB->pData, pCCB->io_size, pCCB->offset, 0);
+
+		bErr = ReadFileEx(pCCB->pTarget->fd, pCCB->pData, pCCB->io_size, pOverlapped, astros_overlappedCompletionRoutine);
+   	}
+    else if(ASTROS_CCB_OP_WRITE == pCCB->op)
+    {
+		ASTROS_DBG_PRINT(verbose, "astros_winaio_setup_ccb READ_WRITE(%p) [%d] pSqe=%p fd=%d pData=%p, io_size=%d offset=%d iov_idx=%d\n", pCCB , pCCB->idx, NULL, pCCB->pTarget->fd, pCCB->pData, pCCB->io_size, pCCB->offset, 0);
+
+		bErr = WriteFileEx(pCCB->pTarget->fd, pCCB->pData, pCCB->io_size, pOverlapped, astros_overlappedCompletionRoutine);
+
+    }
+	else
+	{
+		DWORD errn = GetLastError();
+		ASTROS_ASSERT(0);
+	}
+
+	ASTROS_DBG_PRINT(verbose, "bErr result = %d\n", bErr);
+	
+	if(FALSE == bErr)
+	{
+		
+
+		ASTROS_ASSERT(0);
+	}
+
+#endif
+
+    return error;
+
+}
+
+
+
+
+
+int astros_winaio_queue_pending(void *pvEngine)
+{
+    
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+int astros_winaio_complete(void *pvEngine, bool bDrain)
+{
+    int error = 0;
+#if 0
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_INFO);
+    aioengine *pEngine = pvEngine;
+    ccb *pCCB;
+	static struct timespec timeout = { 0, 10000 };
+	
+	struct io_event event;
+		
+
+	
+    ASTROS_DBG_PRINT(verbose, "astros_libaio_complete CALL(%p)\n", pEngine);
+    
+    error = io_getevents(pEngine->engineSpecific.libaio.ioctx, 0, 1, &event, &timeout);
+
+
+
+	if(1 == error)
+	{
+
+		pCCB = event.data;
+		
+
+    	ASTROS_ASSERT(pCCB);
+		
+
+		if(pEngine->bLatency)
+		{
+			pCCB->end_ns = ASTROS_PS_HRCLK_GET();
+
+			astros_batter_calculate_cmd_latency(pCCB);
+		}
+		
+
+		ASTROS_DEC_ATOMIC(&pCCB->pTarget->atomic_qd);
+	    ASTROS_DBG_PRINT(verbose, "astros_libaio_complete CCB(%p) idx = %d user_data = %p atomic_qd = %d\n", pCCB, pCCB->idx, (void *)event.data, ASTROS_GET_ATOMIC(pCCB->pTarget->atomic_qd));
+
+		if((event.res != pCCB->io_size) || (event.res2 != 0))
+		{
+			error = event.res;
+			ASTROS_DBG_PRINT(ASTROS_DBGLVL_ERROR, "astros_libaio_complete CCB(%p) idx = %d res = %d strerror = %s tgtidx = %d : %s offset=%lld res2 = %d\n", pCCB, pCCB->idx,  error, strerror(error), pCCB->pTarget->idx, pCCB->pTarget->path, pCCB->offset, event.res2);	
+		}
+
+		if(bDrain)
+		{
+
+		}
+    	else if(pCCB->pfnCCBCallback)
+    	{
+        	pCCB->pfnCCBCallback(pCCB);
+    	}
+
+		error = 0;
+	}
+	else
+	{
+		error = 1;
+	}
+#endif
+    return error;
+}
+
+int astros_winaio_prep_ccb(void *pvEngine, ccb *pCCB, target *pTarget, void * pvfnCallback)
+{
+    int error = 0;
+    aioengine *pEngine = pvEngine;
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_IOPATH);
+
+    pCCB->pvEngine = pvEngine;
+    pCCB->pTarget = pTarget;
+    pCCB->pfnCCBCallback = pvfnCallback;
+    
+ 
+    ASTROS_DBG_PRINT(verbose, "astros_aio_prep_ccb(%p) [%d] error = %d\n", pCCB , pCCB->idx, error);
+    
+	astros_ccb_put(&pEngine->pStartQueueHead, pCCB);
+
+   
+    return error;
+}
+
+
+
+
+
+struct
+{
+	UINT64 hrFreq;
+
+
+} wincfg;
+
+
+int astros_win_init(void)
+{
+	LARGE_INTEGER freq;
+
+	if(QueryPerformanceFrequency(&freq)	)
+	{
+		wincfg.hrFreq = freq.QuadPart;
+
+		printf("win hrFreq = %lld\n", wincfg.hrFreq);
+	}
+	else
+	{
+		ASTROS_ASSERT(0);
+	}
+
+	return 0;
+}
+
+
+
+
+
+int astros_umpire_pregame(astros_lineup *pLineup)
+{
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_INFO);
+    UINT32 master_cpu;
+    int pid = _getpid();
+	DWORD dwThreadAffinityMask;
+	DWORD_PTR afmsk;
+	
+
+
+
+    
+    pLineup->gametime.id = GetCurrentProcess();
+
+    master_cpu = ASTROS_PS_GET_NCPUS() - 1;
+
+    pLineup->gametime.max_batters = master_cpu;
+
+
+	ASTROS_DBG_PRINT(verbose, "master_cpu = %d  : gametime.id=%p \n", master_cpu, pLineup->gametime.id);
+
+	if(astros_scorer_get(&pLineup->gametime.scorer_id, pLineup, master_cpu))
+	{
+		ASTROS_ASSERT(0);
+	}
+
+    ASTROS_DBG_PRINT(verbose, "astros_umpire_pregame() POST batter_count = %d pid = %d\n", pLineup->gametime.batter_count, pid);
+
+    return 0;
+
+}
+
+int astros_get_open_mode(int operation, astros_lineup * pLineup)
+{
+	return 0;
+}
+
+
+
+int astros_batter_set_priority(batter *pBatter, int rt_policy)
+{
+    return 0;
+}
+int astros_batter_get_policy_and_priority(batter *pBatter, int *pPolicy, int * pPriority)
+{
+	return 0;
+}
+
+
+LARGE_INTEGER g_win_ticksPerSec;
+UINT64 g_win_nano_multiplier;
+
+void astros_win_init_hifreq_clock(void)
+{
+	UINT64 billion = 1000000000;
+
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_INFO);
+
+	QueryPerformanceFrequency(&g_win_ticksPerSec);
+
+	if(g_win_ticksPerSec.QuadPart)
+	{
+		g_win_nano_multiplier = billion / g_win_ticksPerSec.QuadPart;
+	}
+	
+	ASTROS_DBG_PRINT(verbose, "astros_win_init_hifreq_clock = %lld g_win_nano_multiplier = %lld\n", g_win_ticksPerSec.QuadPart, g_win_nano_multiplier);
+
+
+
+}
+
+
+int main(int argc, char **argv)
+{
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_INFO);
+    astros_lineup *pLineup;
+	UINT64 start_ns;
+	UINT64 end_ns;
+	float  elap_sec = 0.0;
+	float innings_per_sec = 0.0;
+	int gameid;
+	
+	astros_win_init_hifreq_clock();
+	astros_init_game_param();
+
+	astros_parse_cli(argc, argv);
+
+
+
+    start_ns = ASTROS_PS_HRCLK_GET();
+
+    pLineup = astros_get_lineup(argc, argv);
+
+	ASTROS_DBG_PRINT(verbose, "EARLYEXIT(main) = %d\n", sizeof(ASTROS_FILE_PTR));
+
+	ASTROS_DBG_PRINT(verbose, "sizeof(ASTROS_FILE_PTR) = %d\n", sizeof(ASTROS_FILE_PTR));
+
+
+	if(astros_field_check(pLineup))
+	{
+    	ASTROS_DBG_PRINT(verbose, "Innings Planned = %d\n", pLineup->innings_planned);
+
+    	astros_lineup_run(pLineup, 0);
+
+		if( pLineup->inning_count)
+		{
+		 	innings_per_sec = ((float)pLineup->inning_count) / elap_sec;
+		}
+
+		
+        ASTROS_BATTER_SLEEPUS(10000);
+	
+    }
+	else
+	{
+		astros_field_monitor(pLineup);
+	}
+
+	end_ns = ASTROS_PS_HRCLK_GET();
+	
+	elap_sec = ((float)(end_ns - start_ns)) / 1000000000.0;
+
+	ASTROS_DBG_PRINT(verbose, "Total Sec = %f Innings = %d innings_per_sec = %f Logfile = %s\n", 
+		elap_sec, pLineup->inning_count, innings_per_sec, pLineup->pScoreCard->csvlogFn);
+
+	gameid = pLineup->gameid.gameid;
+
+	astros_put_gameid(gameid);
+	
+	astros_free_lineup(pLineup);
+	
+    return 0;
+    
+}
+
+int astros_get_rt_policty()
+{
+	return 0;    
+}    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

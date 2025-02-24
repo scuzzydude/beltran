@@ -268,6 +268,13 @@ void _nvm_ref_put(nvm_aq_ref ref)
  * Execute an NVM admin command.
  * Lock must be held when calling this function.
  */
+
+static int emulate_execute_command(struct local_admin* admin, const nvm_cmd_t* cmd, nvm_cpl_t* cpl)
+{
+	//dprintf("emulate_execute_command(%p)\n", cmd);
+	return 0;
+}
+
 static int execute_command(struct local_admin* admin, const nvm_cmd_t* cmd, nvm_cpl_t* cpl)
 {
     nvm_cmd_t local_copy;
@@ -417,6 +424,19 @@ int nvm_raw_rpc(nvm_aq_ref ref, nvm_cmd_t* cmd, nvm_cpl_t* cpl)
 
     err = ref->stub(ref->data, cmd, cpl);
 
+	if(ref->ctrl->handle.emulated)
+	{
+			//TODO: We evenually will just use an emulated ADMIN queue
+			//But skipping that step so that we can emulate CQ/SQ on the GPU
+			//first.   We still need to tell the emulator about the command
+			//just remove this, and the stub should send command to emulator 
+		//printf("nvm_raw_rpc(%d) calling fnEmuCallout = %p \n", 0, ref->ctrl->handle.fnEmuCallout);
+
+		ref->ctrl->handle.fnEmuCallout(&ref->ctrl->handle, cmd, cpl);				
+	}
+
+
+
     _nvm_mutex_unlock(&ref->lock);
 
     return NVM_ERR_PACK(cpl, err);
@@ -480,16 +500,26 @@ int nvm_aq_create(nvm_aq_ref* handle, const nvm_ctrl_t* ctrl, const nvm_dma_t* w
         return err;
     }
 
-    ref->stub = (rpc_stub_t) execute_command;
-    ref->release = (rpc_free_binding_t) &remove_admin;
+	ref->release = (rpc_free_binding_t) &remove_admin;
 
+    *handle = ref;
+
+	if(ctrl->emulated)
+	{		
+    	ref->stub = (rpc_stub_t) emulate_execute_command;
+		return 0;
+	}
+	else
+	{
+    	ref->stub = (rpc_stub_t) execute_command;
+	}
+   
     // Reset controller
     const struct local_admin* admin = (const struct local_admin*) ref->data;
     nvm_raw_ctrl_reset(ctrl, admin->qmem->ioaddrs[0], admin->qmem->ioaddrs[1]);
     //printf("admin sq vaddr: %p\tsq ioaddr: %lx\n", admin->qmem->vaddr, admin->qmem->ioaddrs[0]);
     //printf("admin cq vaddr: %p\tcq ioaddr: %lx\n", admin->qmem->vaddr+4096, admin->qmem->ioaddrs[1]);
     
-    *handle = ref;
     return 0;
 }
 

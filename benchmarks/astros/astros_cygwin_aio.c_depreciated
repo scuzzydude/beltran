@@ -1,0 +1,577 @@
+
+
+#include "astros.h"
+
+
+BOOL GetErrorMessage(DWORD dwErrorCode, LPTSTR pBuffer, DWORD cchBufferLength)
+{
+    if (cchBufferLength == 0)
+    {
+        return FALSE;
+    }
+
+    DWORD cchMsg = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                 NULL,  /* (not used with FORMAT_MESSAGE_FROM_SYSTEM) */
+                                 dwErrorCode,
+                                 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                 pBuffer,
+                                 cchBufferLength,
+                                 NULL);
+    return (cchMsg > 0);
+}
+
+void astros_aiowin_dump_error(void)
+{
+
+
+	char errbuf[128];
+	int lerr = GetLastError();
+
+	GetErrorMessage(lerr, errbuf, 128);
+
+	ASTROS_DBG_PRINT(ASTROS_DBGLVL_ERROR, "Window Error Code = %d : %s\n", lerr, errbuf);
+
+}
+
+int astros_aiowin_init(void *pvEngine)
+
+{
+#if 0
+    aioengine *pEngine = pvEngine;
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_IOPATH);
+    int ret;
+    struct io_uring *pRing;
+	int flags = 0; //IORING_SETUP_IOPOLL;
+	
+    ASTROS_ASSERT(pvEngine);
+        
+
+    ASTROS_DBG_PRINT(verbose, "astros_aiowin_init(%p) depth = %d\n", pvEngine, pEngine->depth);
+
+    pRing = &pEngine->engineSpecific.iouring.ring;
+
+    ret = io_uring_queue_init(pEngine->depth, pRing, flags);
+
+    pEngine->engineSpecific.iouring.pIov = malloc(sizeof(struct iovec) * pEngine->depth);
+
+	if(ret != 0)
+	{
+
+    	ASTROS_DBG_PRINT(ASTROS_DBGLVL_ERROR, "astros_aiowin_init(%p) ret = %d : STRERROR=%s\n", pvEngine, ret, strerror(ret));
+		ASTROS_ASSERT(0);
+	}
+#endif
+
+    return 0;
+}
+
+int astros_aiowin_free(void *pvEngine)
+{
+    int error = 0;
+#if 0
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_IOPATH);
+    struct io_uring *pRing;
+    aioengine *pEngine = pvEngine;
+
+    ASTROS_ASSERT(pvEngine);
+
+    pRing = &pEngine->engineSpecific.iouring.ring;
+
+    io_uring_queue_exit(pRing);
+
+    ASTROS_DBG_PRINT(verbose, "astros_aiowin_free(%p) error = %d\n", pvEngine, error);
+#endif
+    return error;
+
+}
+
+int astros_aiowin_setup_ccb(void *pvEngine, ccb *pCCB)
+{
+	int lerr;
+	int error = 0;
+    aioengine *pEngine = pvEngine;
+
+	LPOVERLAPPED lpOvl = NULL;
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_NONE);
+    BOOL bSuccess;
+
+	
+    ASTROS_DBG_PRINT(verbose, "astros_aiowin_setup_ccb(%p) [%d] op = %d fd = %d \n", 
+		pCCB , pCCB->idx, pCCB->op, pCCB->pTarget->fd);
+
+	ASTROS_ASSERT(pCCB->io_size);
+
+	if(pCCB->io_size)
+	{
+
+		
+
+	}
+	else
+	{
+		astros_ccb_set_fixed_load(pCCB, pEngine);
+	}
+
+	
+	ASTROS_DBG_PRINT(verbose, "astros_aiowin_setup_ccb(%p) Call pfnCCB = %p\n", pCCB, pCCB->pfnCCB);
+
+	pCCB->pfnCCB(pCCB);
+
+	lpOvl = &pCCB->engine_scratch.aiowin.stOverlapped;
+
+	lpOvl->Internal = 0;
+	lpOvl->InternalHigh = 0;
+	lpOvl->Offset = pCCB->offset & 0xFFFFFFFF;
+	lpOvl->OffsetHigh = pCCB->offset >> 32;	
+	lpOvl->hEvent = NULL;
+
+
+	if(pEngine->bLatency)
+	{
+		pCCB->start_ns = ASTROS_PS_HRCLK_GET();
+		pCCB->end_ns = 0;
+		astros_batter_calculate_inter_latency(pCCB);
+ 	}
+
+	ASTROS_DBG_PRINT(verbose, "astros_aiowin_setup_ccb(%p) OP = %d\n", pCCB, pCCB->op);
+
+    if(ASTROS_CCB_OP_READ == pCCB->op)
+    {
+
+		ASTROS_DBG_PRINT(verbose, "astros_aiowin_setup_ccb ReadFile(%p) [%d]  fd=%d pData=%p, io_size=%d offset=%d \n", pCCB , pCCB->idx, pCCB->pTarget->fd, pCCB->pData, pCCB->io_size, pCCB->offset);
+
+		bSuccess = ReadFile(pCCB->pTarget->fd, pCCB->pData, pCCB->io_size, NULL, lpOvl);
+		
+
+
+    }
+    else if(ASTROS_CCB_OP_WRITE == pCCB->op)
+    {
+
+		ASTROS_DBG_PRINT(verbose, "astros_aiowin_setup_ccb WriteFile(%p) [%d]  fd=%d pData=%p, io_size=%d offset=%d \n", pCCB , pCCB->idx, pCCB->pTarget->fd, pCCB->pData, pCCB->io_size, pCCB->offset);
+
+		bSuccess = WriteFile(pCCB->pTarget->fd, pCCB->pData, pCCB->io_size, NULL, lpOvl);
+
+
+    }
+    else
+    {
+        ASTROS_ASSERT(0);
+    }
+
+	lerr = GetLastError();
+
+	if(bSuccess || (ERROR_IO_PENDING == lerr))
+	{
+		ASTROS_DBG_PRINT(verbose, "astros_aiowin_setup_ccb(%p) [%d] SUCCESS lerr(%d)\n", pCCB , pCCB->idx, lerr);
+	}	
+	else
+	{
+
+		ASTROS_DBG_PRINT(ASTROS_DBGLVL_ERROR, "astros_aiowin_setup_ccb(%p) [%d] ERROR\n", pCCB , pCCB->idx );
+		astros_aiowin_dump_error();
+		error++;
+	}
+
+	ASTROS_INC_ATOMIC(&pCCB->pTarget->atomic_qd);
+	
+    ASTROS_DBG_PRINT(verbose, "astros_aiowin_setup_ccb(%p) [%d]  atomic_qd = %d\n", pCCB , pCCB->idx,  ASTROS_GET_ATOMIC(pCCB->pTarget->atomic_qd));
+
+    return error;
+
+}
+
+int astros_aiowin_prep_ccb(void *pvEngine, ccb *pCCB, target *pTarget, void * pvfnCallback)
+{
+    int error = 0;
+
+    aioengine *pEngine = pvEngine;
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_IOPATH);
+
+    pCCB->pvEngine = pvEngine;
+    pCCB->pTarget = pTarget;
+    pCCB->pfnCCBCallback = pvfnCallback;
+    
+ 
+    ASTROS_DBG_PRINT(verbose, "astros_aiowin_prep_ccb(%p) [%d] error = %d\n", pCCB , pCCB->idx, error);
+    
+	astros_ccb_put(&pEngine->pStartQueueHead, pCCB);
+   
+    return error;
+}
+
+int astros_aiowin_reset(void *pvEngine)
+{
+
+    return 0;
+}
+
+int astros_aiowin_register(void *pvEngine)
+{
+	return 0;
+}
+
+
+
+int astros_aiowin_queue_pending(void *pvEngine)
+{
+	/* NoOp On Windows */
+    return 0;
+}
+
+
+
+
+#define AIOWIN_GET_CCB_FROM_OVL(_povl) (ccb *)((void *)_povl - offsetof(ccb, engine_scratch.aiowin.stOverlapped))
+
+int astros_aiowin_complete(void *pvEngine, bool bDrain)
+{
+	int verbose = ASTROS_DBGLVL_NONE;
+	aioengine *pEngine = pvEngine;
+	OVERLAPPED_ENTRY overlapped_entry[16];
+	BOOL ret;
+	UINT32 count;
+	UINT32 wait_ms = 1000;	
+	int i;
+	OVERLAPPED *pOvl;
+	ccb *pCCB;
+	
+	ret = GetQueuedCompletionStatusEx(pEngine->engineSpecific.hCompletionPort, overlapped_entry, 16, &count, wait_ms, 0);
+
+
+	if(ret)
+	{
+		ASTROS_DBG_PRINT(verbose, "astros_aiowin_complete() %d completions\n", count);
+
+		for(i = 0; i < count; i++)
+		{
+			pOvl = overlapped_entry[i].lpOverlapped;
+			
+			pCCB = AIOWIN_GET_CCB_FROM_OVL(pOvl);
+
+			
+		    ASTROS_ASSERT(pCCB);
+
+			if(pEngine->bLatency)
+			{
+				pCCB->end_ns = ASTROS_PS_HRCLK_GET();
+			
+				astros_batter_calculate_cmd_latency(pCCB);
+			}
+			
+			
+			ASTROS_DEC_ATOMIC(&pCCB->pTarget->atomic_qd);
+			ASTROS_DBG_PRINT(verbose, "astros_aiowin_complete CCB(%p) idx = %d atomic_qd = %d\n", pCCB, pCCB->idx, ASTROS_GET_ATOMIC(pCCB->pTarget->atomic_qd));
+			
+
+			if((pOvl->Internal == ERROR_SUCCESS) && (pCCB->io_size == overlapped_entry[i].dwNumberOfBytesTransferred))
+			{
+
+				ASTROS_DBG_PRINT(verbose, "astros_aiowin_complete CCB(%p) GOOD idx = %d pOvl->Internal = %d io_size = %d dwNumberOfBytesTransferred = %d\n", pCCB, pCCB->idx, pOvl->Internal, pCCB->io_size, overlapped_entry[i].dwNumberOfBytesTransferred);	
+
+			}
+			else
+			{
+				ASTROS_DBG_PRINT(ASTROS_DBGLVL_ERROR, "astros_aiowin_complete CCB(%p) ERROR idx = %d pOvl->Internal = %d io_size = %d dwNumberOfBytesTransferred = %d\n", pCCB, pCCB->idx, pOvl->Internal, pCCB->io_size, overlapped_entry[i].dwNumberOfBytesTransferred);	
+				ASTROS_ASSERT(0);
+			}
+
+			
+			if(bDrain)
+			{
+
+			}
+    		else if(pCCB->pfnCCBCallback)
+    		{
+        		pCCB->pfnCCBCallback(pCCB);
+    		}
+
+		}
+		
+	}
+	else
+	{
+		ASTROS_DBG_PRINT(verbose, "astros_aiowin_complete(%p) NO COMPLETIONS %p\n", pvEngine, pEngine->engineSpecific.hCompletionPort);
+		//astros_aiowin_dump_error();
+
+	}
+
+	
+
+	
+    return (int)count;
+}
+
+
+
+int astros_open_target(astros_lineup * pLineup, char *path, int targetidx, int operation)
+{
+    int error = 0;
+	DWORD flags = FILE_FLAG_POSIX_SEMANTICS | FILE_FLAG_OVERLAPPED;
+	DWORD sharemode = FILE_SHARE_READ | FILE_SHARE_WRITE;
+//	DWORD openmode = OPEN_ALWAYS;
+	DWORD openmode = OPEN_EXISTING;
+	DWORD access = GENERIC_READ;
+	int verbose = astros_get_verbosity(ASTROS_DBGLVL_NONE);
+    target *pTarget;
+	aioengine *pEngine;
+	
+	
+
+	ASTROS_DBG_PRINT(verbose, "astros_open_target(%p) targetidx = %d gametime = %p\n", pLineup, targetidx, pLineup->gametime);
+    ASTROS_ASSERT(targetidx < ASTROS_MAX_TARGETS);
+    
+    pTarget = &pLineup->gametime.targets[targetidx];
+
+	ASTROS_DBG_PRINT(verbose, "astros_open_target(%p) pTarget = %p\n", pTarget, pTarget);
+
+	ASTROS_ASSERT(pTarget);
+	
+	ASTROS_ASSERT(pTarget->pvEngine);
+
+	pEngine = pTarget->pvEngine;
+	
+
+	if(ASTROS_CCB_OP_WRITE == operation)
+	{
+		access = GENERIC_READ | GENERIC_WRITE;
+	}
+
+
+	ASTROS_DBG_PRINT(verbose, "astros_open_target(%d) CreateFile(path = %s, access = %x, sharemode = %x, NULL = %px, openmode = %x, flags = %x, NULL = %px)\n", targetidx, path, access, sharemode, NULL, openmode, flags, NULL);
+	ASTROS_DBG_PRINT(verbose, "astros_open_target[CYGWIN](%d) atomic_qd = %d fd = %px\n", targetidx, ASTROS_GET_ATOMIC(pTarget->atomic_qd), pTarget->fd);
+	
+
+	ASTROS_SET_ATOMIC(pTarget->atomic_qd, 0);
+
+	if(pTarget->fd && (pTarget->fd != INVALID_HANDLE_VALUE))
+	{
+			if(0) //pTarget->mode == access)
+			{
+				ASTROS_DBG_PRINT(verbose, "astros_open_target(%d) OPEN ALREADY in mode = XX '%s' GOOD fd = %d OP = %d\n", targetidx, path, pTarget->fd, operation);
+				return error;
+			}
+			else
+			{
+
+				CloseHandle(pTarget->fd);
+
+
+				if(INVALID_HANDLE_VALUE != pEngine->engineSpecific.hCompletionPort)
+				{
+					CloseHandle(pEngine->engineSpecific.hCompletionPort);
+				}
+				ASTROS_BATTER_SLEEPUS(100);
+				pEngine->engineSpecific.hCompletionPort = INVALID_HANDLE_VALUE;
+				pTarget->fd = INVALID_HANDLE_VALUE;
+			}
+	  }	
+
+
+
+	switch(pTarget->access)
+	{
+		case ASTROS_SEQ_MODE_RANDOM:
+			flags |= FILE_FLAG_RANDOM_ACCESS;
+			break;
+
+
+		default:
+			flags |= FILE_FLAG_SEQUENTIAL_SCAN;
+			break;
+		
+
+	}
+
+
+	pTarget->fd = CreateFile(path, access, sharemode, NULL, openmode, flags, NULL);
+
+
+    strcpy(pTarget->path, path);
+
+    if(INVALID_HANDLE_VALUE != pTarget->fd)
+    {
+		HANDLE ovh;
+        ASTROS_DBG_PRINT(verbose, "astros_open_target(%d) '%s' GOOD fd = %d OP = %d\n", targetidx, path, pTarget->fd, operation);
+		pTarget->mode = access;
+
+		ovh = CreateIoCompletionPort(pTarget->fd, NULL, 0, 0);
+
+		if (INVALID_HANDLE_VALUE == ovh) 
+		{
+			ASTROS_DBG_PRINT(ASTROS_DBGLVL_ERROR, "astros_open_target(%d) CreateIoCompletionPort Error\n", targetidx);
+			astros_aiowin_dump_error();
+			error = -1;
+		}
+		else
+		{
+			pEngine->engineSpecific.hCompletionPort = ovh;
+			ASTROS_DBG_PRINT(verbose, "astros_open_target(%d) CreateIoCompletionPort GOOD = %p\n", targetidx, pEngine->engineSpecific.hCompletionPort);
+		}
+
+
+    }
+    else
+    {
+		
+	    ASTROS_DBG_PRINT(ASTROS_DBGLVL_ERROR, "astros_open_target(%d) '%s' FAILED fd = %d \n", targetidx, path, pTarget->fd);
+		astros_aiowin_dump_error();
+        error =  -1;   
+    }
+
+
+   return error;
+
+}
+
+int astros_win_rotation_create(void * pVfn, void * pvBatter)
+{
+	int verbose = ASTROS_DBGLVL_INFO;
+
+	batter *pBatter = pvBatter;
+
+
+	pBatter->id = CreateThread(NULL, 0, pVfn, pvBatter, 0, NULL);
+
+	ASTROS_DBG_PRINT(verbose, "astros_win_rotation_create[%p] \n", pBatter->id);
+	
+	if(pBatter->id)
+	{
+		return 0;
+	}
+
+
+	return 1;
+}
+int astros_win_batter_set_cpu(ASTROS_BATTER_JERSEY jersey, int cpu)
+{
+#if 0
+	DWORD one = 1;
+	DWORD_PTR mask = one << (DWORD_PTR)cpu;
+	int verbose = ASTROS_DBGLVL_INFO;
+
+	ASTROS_DBG_PRINT(verbose, "astros_win_batter_set_cpu(%d)[%p] MASK = %p \n", cpu, jersey, mask);
+
+
+	if(0 == SetThreadAffinityMask(jersey, mask))
+	{
+		ASTROS_DBG_PRINT(verbose, "astros_win_batter_set_cpu[%p] errOR \n", jersey);
+		astros_aiowin_dump_error();
+		return 1;
+	}
+#endif
+	return 0;
+
+
+
+}
+
+int astros_cygwin_rotation_create(void * pVfn, void * pvBatter, int cpu)
+{
+#if 0
+	batter *pBatter = pvBatter;
+	cpu_set_t cpuset;
+
+	pthread_attr_t attr;
+
+	CPU_ZERO(&cpuset);
+	
+	CPU_SET(cpu, &cpuset);
+
+	pthread_attr_init(&attr);
+
+	pthread_attr_setaffinity_np(&attr, sizeof(cpuset), &cpuset);
+
+
+	if(pthread_create(&pBatter->id, &attr, pVfn, pBatter))
+	{
+		return 0;
+	}
+#endif
+	return 1;
+
+}
+
+
+int astros_cygwin_payofff_umpire(astros_lineup *pLineup)
+{
+#if 0
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_INFO);
+    UINT32 master_cpu =	pLineup->gametime.max_batters;
+    pid_t pid = getpid();
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    UINT32 cpu;
+    int policy;
+    struct sched_param param;
+    int pmax, pmin;
+    const int priority_backoff = 1;
+
+
+    
+    pthread_getschedparam(pLineup->gametime.id, &policy, &param);
+   
+    ASTROS_GET_CPU(&cpu);
+    ASTROS_DBG_PRINT(verbose, "astros_cygwin_payofff_umpire() max_batters = %d current_cpu = %d pid = %d policy = %d priority = %d\n", pLineup->gametime.max_batters, cpu, pid, policy, param.sched_priority);
+
+
+    CPU_SET(master_cpu, &set);
+
+#if 0
+    pmin = sched_get_priority_min(pLineup->rt_policy);
+    pmax = sched_get_priority_max(pLineup->rt_policy);
+
+    pLineup->rt_priority = pmax - priority_backoff;
+
+    ASTROS_DBG_PRINT(verbose, "astros_cygwin_payofff_umpire() rt_policy = %d pmin = %d pmax = %d pLineup->rt_priority = %d\n", pLineup->rt_policy, pmin, pmax, pLineup->rt_priority);
+
+    param.sched_priority = pLineup->rt_priority;
+
+    pthread_setschedparam(pLineup->gametime.id, pLineup->rt_policy, &param);
+#endif
+
+    if (sched_setaffinity(pid, sizeof(set), &set) == 0)
+    {
+        ASTROS_BATTER_SLEEPUS(10000);
+    }
+    else
+    {
+		ASTROS_DBG_PRINT(ASTROS_DBGLVL_ERROR, "astros_cygwin_payofff_umpire() rt_priority =%d id = %px\n", pLineup->rt_priority, pLineup->gametime.id);
+        ASTROS_ASSERT(0);
+    }
+
+
+    ASTROS_GET_CPU(&cpu);
+
+    ASTROS_DBG_PRINT(verbose, "astros_cygwin_payofff_umpire() POST batter_count = %d current_cpu = %d pid = %d policy = %d priority = %d\n", pLineup->gametime.batter_count, cpu, pid, policy, param.sched_priority);
+
+	exit(0);
+#endif
+    return 0;
+
+}
+
+UINT64 g_win_nano_multiplier;
+LARGE_INTEGER g_win_ticksPerSec;
+
+
+void astros_cygwin_init_hifreq_clock(void)
+{
+	UINT64 billion = 1000000000;
+
+    int verbose = astros_get_verbosity(ASTROS_DBGLVL_INFO);
+
+	QueryPerformanceFrequency(&g_win_ticksPerSec);
+
+	if(g_win_ticksPerSec.QuadPart)
+	{
+		g_win_nano_multiplier = billion / g_win_ticksPerSec.QuadPart;
+	}
+	
+	ASTROS_DBG_PRINT(verbose, "astros_win_init_hifreq_clock = %lld g_win_nano_multiplier = %lld\n", g_win_ticksPerSec.QuadPart, g_win_nano_multiplier);
+
+
+
+}
+
+

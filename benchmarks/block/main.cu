@@ -214,6 +214,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+#ifdef BAM_EMU_COMPILE        
+	cudaDeviceReset();
+#endif
 
     cudaDeviceProp properties;
     if (cudaGetDeviceProperties(&properties, settings.cudaDevice) != cudaSuccess)
@@ -221,6 +224,8 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Failed to get CUDA device properties\n");
         return 1;
     }
+
+    printf("Prop: deviceOverlap = %d\n", properties.deviceOverlap);
 
     try {
 
@@ -254,8 +259,14 @@ int main(int argc, char** argv) {
         cuda_err_chk(cudaSetDevice(settings.cudaDevice));
         std::vector<Controller*> ctrls(settings.n_ctrls);
         for (size_t i = 0 ; i < settings.n_ctrls; i++)
+	{
+#ifdef BAM_EMU_COMPILE            
+            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  BAM_EMU_TARGET_ENABLE);
+#else
             ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues);
-
+#endif
+	}
+	
         //auto dma = createDma(ctrl.ctrl, NVM_PAGE_ALIGN(64*1024*10, 1UL << 16), settings.cudaDevice, settings.adapter, settings.segmentId);
 
         //std::cout << dma.get()->vaddr << std::endl;
@@ -341,10 +352,69 @@ int main(int argc, char** argv) {
             cuda_err_chk(cudaMemcpy(d_access_assignment, access_assignment, n_threads*sizeof(uint8_t), cudaMemcpyHostToDevice));
         }
         std::cout << "atlaunch kernel\n";
+#ifdef BAM_EMU_COMPILE 
+//		cuda_err_chk(cudaStreamCreate(&ctrls[0]->pEmu->tgt.bamStream));
+#ifdef BAM_EMU_START_EMU_POST_Q_CONFIG
+		printf("BAM_EMU_START_EMU_POST_Q_CONFIG start_emulation_target() CALL\n");
+		start_emulation_target(ctrls[0]->pEmu);
+		printf("BAM_EMU_START_EMU_POST_Q_CONFIG start_emulation_target() RETURN\n");
+//		sleep(1);
+#endif
+
+
+#ifdef BAM_EMU_APP_LAYER_EMU_DUMMY
+		printf("BAM_EMU_APP_LAYER_EMU_DUMMY start kernel g_size = %ld b_size = %ld\n", g_size, b_size);
+//		dummy_queueStream<<<1,1,0,ctrls[0]->pEmu->tgt.tgtStream>>>(ctrls[0]->pEmu->tgt.pTgt_control, ctrls[0]->pEmu->tgt.pDevQPairs);
+
+		pthread_create(&ctrls[0]->pEmu->emu_threads[1], NULL, launch_dummy_target, ctrls[0]->pEmu); 
+
+		printf("BAM_EMU_APP_LAYER_EMU_DUMMY start kernel return \n");
+#endif
+#ifdef BAM_EMU_APP_LAYER_BAM_DUMMY
+
+#endif
+		sleep(1);
+#if 1
+
+
+
         if (settings.random)
-            random_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
-        else
+        {
+			std::cout << "calling random_access_kernel" << std::endl;
+ 
+            random_access_kernel<<<g_size, b_size, 0, ctrls[0]->pEmu->tgt.bamStream>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
+//            random_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
+        }
+		else
             sequential_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, settings.numReqs, settings.accessType, d_access_assignment);
+
+
+#endif
+		
+		printf("kicked off io kernel, return\n");
+		cudaStreamSynchronize(ctrls[0]->pEmu->tgt.bamStream);
+		printf("cudaStreamSynchronize return\n");
+		
+	
+		ctrls[0]->pEmu->bRun = 0;
+		sleep(1);
+		
+		
+//		cleanup_emulator_target(ctrls[0]->pEmu);
+//		printf("EXIT!!!!\n");
+//		exit(0);
+#else
+
+        if (settings.random)
+        {
+			std::cout << "calling random_access_kernel" << std::endl;
+ 
+            random_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
+        }
+		else
+            sequential_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, settings.numReqs, settings.accessType, d_access_assignment);
+
+#endif
         Event after;
 
         //print_cache_kernel<<<1,1>>>(d_pc);
