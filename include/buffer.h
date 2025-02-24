@@ -197,7 +197,9 @@ inline DmaPtr createDma(const nvm_ctrl_t* ctrl, size_t size, int cudaDevice)
 
     //std::cout << "Got Device mem\n";
     int status = nvm_dma_map_device(&dma, ctrl, bufferPtr, size);
-    //std::cout << "Got dma_map_devce\n";
+    //std::cout << "Got dma_map_devce status\n";
+	//printf("status = %d\n", status);
+	
     if (!nvm_ok(status))
     {
         //std::cout << "Got dma_map_devce failed\n";
@@ -205,12 +207,16 @@ inline DmaPtr createDma(const nvm_ctrl_t* ctrl, size_t size, int cudaDevice)
         throw error(string("Failed to map device memory: ") + nvm_strerror(status));
     }
     cudaError_t err = cudaMemset(bufferPtr, 0, size);
+	//printf("memset = %d\n", err);
+
     if (err != cudaSuccess)
     {
         cudaFree(bufferPtr);
         throw error(string("Failed to clear device memory: ") + cudaGetErrorString(err));
     }
     dma->vaddr = bufferPtr;
+
+	//printf("vaddr = %p\n", dma->vaddr);
 
     return DmaPtr(dma, [bufferPtr, origPtr](nvm_dma_t* dma) {
         nvm_dma_unmap(dma);

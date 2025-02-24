@@ -190,7 +190,6 @@ typedef struct
 	cudaStream_t            queueStream;
 	cudaStream_t            bamStream;
 	
-//	bam_emulated_queue_pair queuePairs[BAM_EMU_MAX_QUEUES];
 
 	bam_emulated_queue_pair *queuePairs;
 
@@ -788,6 +787,7 @@ static void emulator_rpc_callout(void *pvCtrl, void* pvCmd, void *pvCpl)
 	{
 		case NVM_ADMIN_CREATE_CQ:
 			cq = 1;
+			 [[fallthrough]];
 		case NVM_ADMIN_CREATE_SQ:
 		{
 			q_number = pCmd->dword[10] & 0xFFFF;
@@ -1171,7 +1171,7 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 				
 	memset(pFileMem, 0, NVM_CTRL_MEM_MINSIZE);
 
-	BAM_EMU_HOST_DBG_PRINT(verbose,"initializeEmulator() sizeof nvm_ctrl_t = %d pFileMem = %p\n", sizeof(nvm_ctrl_t), pFileMem);
+	BAM_EMU_HOST_DBG_PRINT(verbose,"initializeEmulator() sizeof nvm_ctrl_t = %d pFileMem = %p ns_id = %d queueDepth = %ld\n", sizeof(nvm_ctrl_t), pFileMem, ns_id, queueDepth);
 
 
 	/* Fix up the Emulators Controller Capabilities here */
@@ -1204,8 +1204,11 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 
 	BAM_EMU_HOST_ASSERT(pEmu);
 
+	//TODO: causes warning: ‘void* memset(void*, int, size_t)’ clearing an object of type ‘struct bam_host_emulator’ with no trivial copy-assignment; use assignment or value-initialization instead [-Wclass-memaccess]
+	//Removing it causes segmentation fault below @pEmu->tgt.d_queue_q_mem = createDma(...)
+	//Despite explict initialization of the member of the pEmu and pEmu->tgt members
+	//Mystery, come back to it.
 	memset(pEmu, 0, sizeof(bam_host_emulator));
-	
 	
 	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator(%p) pCtrl\n", pCtrl);
 
@@ -1236,25 +1239,38 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 		pEmu->b_size = EMU_GRID_SIZE_DEFAULT;
 		
 	}
-	printf("numQueues = %d g_size = %d b_size = %d EMU_GRID_SIZE_DEFAULT=%d\n", numQueues, pEmu->g_size, pEmu->b_size, EMU_GRID_SIZE_DEFAULT); 
+	printf("numQueues = %ld g_size = %d b_size = %d EMU_GRID_SIZE_DEFAULT=%d\n", numQueues, pEmu->g_size, pEmu->b_size, (uint32_t)EMU_GRID_SIZE_DEFAULT); 
 
 	pEmu->pCtrl = pCtrl;
 	pEmu->cudaDevice = cudaDevice;
 
+	pEmu->tgt.d_queue_q_mem = NULL;
+	pEmu->tgt.d_target_control_mem = NULL;
+	pEmu->tgt.tgtStream = 0;
+	pEmu->tgt.queueStream = 0;
+	pEmu->tgt.bamStream = 0;
+	pEmu->tgt.queuePairs = NULL;
+	pEmu->tgt.pTgt_control = NULL; 
+	pEmu->tgt.pDevQPairs = NULL;
 
+	
 	cuda_err_chk(cudaMallocHost(&pEmu->tgt.queuePairs, sizeof(bam_emulated_queue_pair) * BAM_EMU_MAX_QUEUES, 0));
 	
 	cuda_err_chk(cudaMallocManaged(&pEmu->tgt.pTgt_control, sizeof(bam_emulated_target_control)));
+
 	
 	pEmu->tgt.pTgt_control->numQueues = 0;
 	pEmu->tgt.pTgt_control->bRun = 1;
 	pEmu->tgt.pTgt_control->bDone = 0;
+		
 
 	strcpy(pEmu->tgt.pTgt_control->szName, "george");
-		
+
+	
 	 
 	
 	pEmu->tgt.d_queue_q_mem = createDma(pEmu->pCtrl, NVM_PAGE_ALIGN(qall_size, 1UL << 16), pEmu->cudaDevice);
+	
 	pEmu->tgt.pDevQPairs = (bam_emulated_queue_pair *)pEmu->tgt.d_queue_q_mem.get()->vaddr;
 
 	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() pEmu->tgt.pDevQPairs = %p &tgt.queuePairs = %p, qall_size = %ld\n", pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size);

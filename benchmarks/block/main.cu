@@ -233,7 +233,7 @@ int main(int argc, char** argv) {
 
         input_f = settings.input;
 
-        void* map_in;
+        void* map_in = NULL;
         int fd_in;
         struct stat sb_in;
 
@@ -248,7 +248,7 @@ int main(int argc, char** argv) {
             map_in = mmap(NULL, sb_in.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_in, 0);
 
             if((map_in == (void*)-1)){
-                fprintf(stderr,"Input file map failed %d\n",map_in);
+                fprintf(stderr,"Input file map failed %p\n",map_in);
                 return 1;
             }
 
@@ -346,7 +346,7 @@ int main(int argc, char** argv) {
         if (settings.accessType == 2) {
             access_assignment = (uint8_t*) malloc(n_threads*sizeof(uint8_t));
             for (size_t i = 0; i < n_threads; i++)
-                access_assignment[i] = (((rand() % 100) + 1) <= settings.ratio) ? NVM_IO_READ : NVM_IO_WRITE;
+                access_assignment[i] = ((uint64_t)((rand() % 100) + 1) <= settings.ratio) ? NVM_IO_READ : NVM_IO_WRITE;
 
             cuda_err_chk(cudaMalloc(&d_access_assignment, n_threads*sizeof(uint8_t)));
             cuda_err_chk(cudaMemcpy(d_access_assignment, access_assignment, n_threads*sizeof(uint8_t), cudaMemcpyHostToDevice));
