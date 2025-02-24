@@ -93,7 +93,6 @@ __device__ static uint64_t gDeviceCodePathVerbosity = BAM_EMU_DEFAULT_CODE_PATH_
 
 __host__  static inline void bam_emu_dbg_printf(int verbose, const char *fmt, ...)
 {
-
     va_list args;
    
     if(verbose >=  BAM_EMU_DBGLVL_COMPILE )
@@ -105,7 +104,6 @@ __host__  static inline void bam_emu_dbg_printf(int verbose, const char *fmt, ..
         va_end(args);
 
     }
-
 }
 
 __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code_path)
@@ -316,7 +314,7 @@ __device__ inline void emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTg
 		dst_addr = (void *)&(((nvm_cmd_t *)(pQP->sQ.pEmuQ))[pQP->sQ.tail]);
 		copy_size  = slot_count * sizeof(nvm_cmd_t);	
 		
-		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Process(%d) ioaddr = %p\n", pQP->q_number, pQP->sQ.ioaddr);
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Process(%d) ioaddr = %p\n", pQP->q_number, (void *)pQP->sQ.ioaddr);
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Process() slot_count = %d src_addr = %p\n", slot_count, src_addr);
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Process() copy_size = %d dst_addr = %p\n", copy_size, dst_addr);
 
@@ -508,7 +506,7 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 #else	
 	//deal with other targets
 #endif
-	return 0;
+	return err;
 	
 }
 
@@ -577,7 +575,7 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 		if(pQP->qp_enabled)		
 		{
 			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check(%d) ENABLED size = %d\n", q_number, pQP->sQ.q_size);
-			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check(%p) %d \n", pQP->sQ.ioaddr, q_number);
+			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check(%p) %d \n", (void *)pQP->sQ.ioaddr, q_number);
 
 			pCmd = (nvm_cmd_t *)pQP->sQ.ioaddr;
 
@@ -611,12 +609,8 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 __global__ void kernel_queueStream(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pDevQPairs)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_KER_QSTRM);
-	int numQueues;
-	const int ns_sleep_q_disabled = 100;
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-	uint32_t laneid = lane_id();
-	uint32_t bid = blockIdx.x;
-	uint32_t smid = get_smid();
+	int numQueues;
 	uint32_t count = 0;
 	uint32_t submit_count = 0;
 	bam_emulated_queue_pair 	   *pQP = &pDevQPairs[tid];
@@ -625,11 +619,15 @@ __global__ void kernel_queueStream(bam_emulated_target_control    *pMgtTgtContro
 	
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: kernel_queueStream ENTER numQueues = %d\n", numQueues);
 #if 0
+	uint32_t laneid = lane_id();
+	uint32_t bid = blockIdx.x;
+	uint32_t smid = get_smid();
 	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream tid = %ld\n", tid);
 	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream laneid = %d\n", laneid);
 	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream bid = %d\n", bid);
 	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream smid = %d\n", smid);
 #endif
+
 	while(pMgtTgtControl->bRun)
 	{
 		if(emu_tgt_SQ_Check(pMgtTgtControl, pQP))
@@ -640,10 +638,6 @@ __global__ void kernel_queueStream(bam_emulated_target_control    *pMgtTgtContro
 			{
 				emu_tgt_CQ_Drain(pMgtTgtControl, pQP, cq_db_head);
 			}
-		}
-		else
-		{
-	//		__nanosleep(ns_sleep_q_disabled);
 		}
 		
 		if(count >= pMgtTgtControl->nOneShot)
@@ -850,7 +844,6 @@ void * launch_emu_target(void *pvEmu)
 {
 	bam_host_emulator * pEmu = (bam_host_emulator *)pvEmu;
 	int             heartbeat_usec = 1000 * 1000;
-	int             kernel_kick_usec = 1;
 	int             count = 0;
 	int 			verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_THREAD);
 
@@ -880,7 +873,6 @@ void * launch_emu_target(void *pvEmu)
 		cudaStreamSynchronize(pEmu->tgt.queueStream);
 #endif
 
-	//	usleep(kernel_kick_usec);
 		count++;
 	}
 	
@@ -991,10 +983,7 @@ void * bam_io_thread(void *pvEmu)
 static void start_emulation_target(bam_host_emulator *pEmu)
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_START_EMU);
-	int i;
-	int ssize = 1024;
-	char *d_szStr;
-	char *h_szStr;
+
 
 	BAM_EMU_HOST_DBG_PRINT(verbose,"start_emulation_target(%p) g_size = %d b_size = %d\n", pEmu, pEmu->g_size, pEmu->b_size);
 
@@ -1058,7 +1047,6 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_CLEANUP_EMU);
 	int i;
-	cudaError_t err;
 	
 	
 	BAM_EMU_HOST_DBG_PRINT(verbose,"cleanup_emulator_target(%p) CALL %d queues configured\n", pEmu, pEmu->tgt.pTgt_control->numQueues);
@@ -1083,8 +1071,11 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 	sleep(1);
 
 	pEmu->bRun = 0;
-	
+
+
+	//TODO: Cleanup 		
 #if 0
+	cudaError_t err;
 
 	BAM_EMU_HOST_DBG_PRINT(verbose,"cleanup_emulator_target() cudaStreamSynchronize(tgtStream) CALL = %d\n", 0); 
 	err = cudaStreamSynchronize(pEmu->tgt.queueStream);	

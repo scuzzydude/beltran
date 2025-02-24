@@ -3,7 +3,7 @@
 ### Running Tests ###
 
 * To disable emulator 
-  * To with NVMe, comment out #define BAM_EMU_COMPILE in emu.h 
+  * To test NVMe, comment out #define BAM_EMU_COMPILE in emu.h 
   * Emulator On by default in this repo
 * Currently only works with block benchmark
 * Current limitations
