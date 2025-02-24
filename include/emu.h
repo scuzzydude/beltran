@@ -1289,8 +1289,5 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	return pCtrl;
 }
 
-
-
-
 #endif
 
