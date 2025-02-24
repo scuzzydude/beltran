@@ -1,3 +1,8 @@
+# Beltran - Storage-Next Emulator for BaM
+
+
+-------------------------------------------------------------------------------
+
 # GPU-Initiated On-Demand High-Throughput Storage Access in the BaM System Architecture
 
 **This is the opencourse implementation of BaM system (ASPLOS'23). Contributions to the codebase are most welcome**
