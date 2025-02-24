@@ -1,5 +1,24 @@
 # Beltran - Storage-Next Emulator for BaM
 
+### Running Tests ###
+
+* To disable emulator 
+  * To with NVMe, comment out #define BAM_EMU_COMPILE in emu.h 
+  * Emulator On by default in this repo
+* Currently only works with block benchmark
+* Current limitations
+  * Tested with up to 256 Queues (faults with more)
+  * Using One-Shot Emulator kernels (investigating resident stream)
+* Code valitation script is ./run in the /beltran subdirectory
+  * unloads/loads libnvm
+  * runs nvidia-smi (make sure GPU is there)
+  * copies block-benchmark to local directory
+  * runs simple test
+* Checkpoint commits were tested with the parameters in the ./run script that match the commit
+
+  
+ 
+
 
 -------------------------------------------------------------------------------
 
