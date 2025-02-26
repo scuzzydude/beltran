@@ -246,15 +246,17 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     }
     printf("finished creating all qps\n");
 
+#ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
+		pDevQueuePairs = pEmu->tgt.pDevQPairs;
+		printf("pDevQueuePairs = %p pEmu->tgt.pDevQPairs =%p\n", pDevQueuePairs, pEmu->tgt.pDevQPairs);
+		pDevTgt_control = pEmu->tgt.pTgt_control;
+#endif
+
     
     d_ctrl_buff = createBuffer(sizeof(Controller), cudaDevice);
     d_ctrl_ptr = d_ctrl_buff.get();
     cuda_err_chk(cudaMemcpy(d_ctrl_ptr, this, sizeof(Controller), cudaMemcpyHostToDevice));
 
-#ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
-	pDevQueuePairs = pEmu->tgt.pDevQPairs;
-	pDevTgt_control = pEmu->tgt.pTgt_control;
-#endif
 
 
 

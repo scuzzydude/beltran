@@ -717,7 +717,7 @@ __global__ void dummy_queueStream(bam_emulated_target_control    *pMgtTgtControl
 
 static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number, int bEnable = 1)
 {
-	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_UPDATEDQ);
+	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_UPDATEDQ);
 	bam_emulated_queue_pair aQP;
 	uint16_t q_idx = q_number - 1;
 	
@@ -740,12 +740,12 @@ static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number,
 			
 			cuda_err_chk(cudaMemcpy(&pEmu->tgt.pDevQPairs[q_idx], &pEmu->tgt.queuePairs[q_idx], sizeof(bam_emulated_queue_pair), cudaMemcpyHostToDevice));
 
-			BAM_EMU_HOST_DBG_PRINT(verbose, "*** Async %d\n", 1);
+			BAM_EMU_HOST_DBG_PRINT(verbose, "*** Copy Good to q_idx=%d dev_ptr = %p dev_base = %p\n", q_idx, &pEmu->tgt.pDevQPairs[q_idx], pEmu->tgt.pDevQPairs);
 			
 #ifdef BAM_EMU_DOUBLE_CHECK_DEVICE_Q_COPY
 			cuda_err_chk(cudaMemcpyAsync(&aQP, &pEmu->tgt.pDevQPairs[q_idx], sizeof(bam_emulated_queue_pair), cudaMemcpyDeviceToHost,  pEmu->tgt.queueStream));
 			
-			BAM_EMU_HOST_DBG_PRINT(verbose, "*** Async %d = %p\n", 3, &pEmu->tgt.pDevQPairs[q_idx] );
+			BAM_EMU_HOST_DBG_PRINT(verbose, "*** Async %d = %p  device_base = %p\n", 3, &pEmu->tgt.pDevQPairs[q_idx], pEmu->tgt.pDevQPairs );
 			
 			BAM_EMU_HOST_DBG_PRINT(verbose, "*** pQ qp_enabled = %d target pointer = %p\n", (uint32_t)aQP.qp_enabled, &pEmu->tgt.pDevQPairs[q_idx]);
 			BAM_EMU_HOST_DBG_PRINT(verbose, "*** SQ %d size = %d\n", (uint32_t)aQP.sQ.q_number, (uint32_t)aQP.sQ.q_size);
