@@ -241,8 +241,16 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 		*h_qps[i]->cq.db = 0;
 		*h_qps[i]->sq.db = 0;
 		
-///		printf("(%d) cq.db = %p sq.sb = %p\n", i, pEmu->tgt.queuePairs[i].cQ.db, pEmu->tgt.queuePairs[i].sQ.db);
+		printf("(%d) cq.db = %p sq.sb = %p\n", i, pEmu->tgt.queuePairs[i].cQ.db, pEmu->tgt.queuePairs[i].sQ.db);
+
+		//hack, have to reupdate the queues becuse of the device pointers for the doorbell
+		
+		emulator_update_d_queue(pEmu,  i + 1, 1);
+
 #endif
+
+		
+
     }
     printf("finished creating all qps\n");
 

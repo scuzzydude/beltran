@@ -559,7 +559,7 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 
 __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP)
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_SQ_CHECK);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_SQ_CHECK);
 
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_SQ_Check(%p) \n", pQP);
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_SQ_Check(%s) \n", pMgtTgtControl->szName);
@@ -651,6 +651,8 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 #endif
 #ifdef RESIDENT_STREAM_DEBUG
 	while(count < 10000000)
+#else
+	while(pMgtTgtControl->bRun)
 #endif
 	{
 
@@ -662,8 +664,6 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 			BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream  %d count = %d x = %d\n", 0, count, 0);	
 		}
 #else
-
-		BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: mu_tgt_SQ_Check x = %d\n", 0);	
 
 		if(emu_tgt_SQ_Check(pMgtTgtControl, pQP))
 		{
@@ -740,7 +740,7 @@ static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number,
 			
 			cuda_err_chk(cudaMemcpy(&pEmu->tgt.pDevQPairs[q_idx], &pEmu->tgt.queuePairs[q_idx], sizeof(bam_emulated_queue_pair), cudaMemcpyHostToDevice));
 
-			BAM_EMU_HOST_DBG_PRINT(verbose, "*** Copy Good to q_idx=%d dev_ptr = %p dev_base = %p\n", q_idx, &pEmu->tgt.pDevQPairs[q_idx], pEmu->tgt.pDevQPairs);
+			BAM_EMU_HOST_DBG_PRINT(verbose, "*** Copy Good to q_idx=%d dev_ptr = %p dev_base = %p sq.db = %p cq.db = %p\n", q_idx, &pEmu->tgt.pDevQPairs[q_idx], pEmu->tgt.pDevQPairs, pEmu->tgt.queuePairs[q_idx].sQ.db, pEmu->tgt.queuePairs[q_idx].cQ.db);
 			
 #ifdef BAM_EMU_DOUBLE_CHECK_DEVICE_Q_COPY
 			cuda_err_chk(cudaMemcpyAsync(&aQP, &pEmu->tgt.pDevQPairs[q_idx], sizeof(bam_emulated_queue_pair), cudaMemcpyDeviceToHost,  pEmu->tgt.queueStream));
