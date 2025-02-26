@@ -22,6 +22,11 @@
 #include "dprintf.h"
 
 
+#include <linux/pci.h>
+
+
+#define PCI_BAR0 0
+
 
 /*
  * Device descriptor
@@ -140,12 +145,16 @@ const struct device_ops emu_ops =
         .unmap_range = &emu_ioctl_unmap,
 };
 
+
+
+
 int nvm_ctrl_init(nvm_ctrl_t** ctrl, int filedes, int emulated)
 {
     int err;
     struct device* dev;
 	const struct device_ops *pOps;
-
+	int bus, slot;
+	
 	pOps = &nv_ops;
 
 	if(emulated)
@@ -161,8 +170,13 @@ int nvm_ctrl_init(nvm_ctrl_t** ctrl, int filedes, int emulated)
         return ENOMEM;
     }
 
+
     dev->fd = dup(filedes);
-    if (dev->fd < 0)
+
+		
+
+
+	if (dev->fd < 0)
     {
         free(dev);
         dprintf("Could not duplicate file descriptor: %s\n", strerror(errno));
@@ -178,8 +192,10 @@ int nvm_ctrl_init(nvm_ctrl_t** ctrl, int filedes, int emulated)
         return errno;
     }
 
-    const size_t mm_size = NVM_CTRL_MEM_MINSIZE;
-    void* mm_ptr = mmap(NULL, mm_size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FILE|MAP_LOCKED, dev->fd, 0);
+ //   const size_t mm_size = NVM_CTRL_MEM_MINSIZE;
+	   const size_t mm_size = NVM_CTRL_MEM_MINSIZE * 2;
+   
+	void* mm_ptr = mmap(NULL, mm_size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FILE|MAP_LOCKED, dev->fd, 0);
     if (mm_ptr == NULL)
     {
         close(dev->fd);

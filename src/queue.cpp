@@ -33,6 +33,9 @@ int nvm_queue_clear(nvm_queue_t* queue, const nvm_ctrl_t* ctrl, bool cq, uint16_
     queue->cid_ticket = 0;
 
     queue->db = (cq ? CQ_DBL(ctrl->mm_ptr, queue->no, ctrl->dstrd) : SQ_DBL(ctrl->mm_ptr, queue->no, ctrl->dstrd));
+
+//	printf("nvm_queue_clear(%d) db  = %p : mm_ptr = %p dstrd = %d\n", no, queue->db, ctrl->mm_ptr, ctrl->dstrd );
+	
     queue->vaddr = vaddr;
     queue->ioaddr = ioaddr;
     

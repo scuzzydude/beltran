@@ -64,6 +64,10 @@ struct Controller
 #ifdef BAM_EMU_COMPILE
 	bam_host_emulator *pEmu;
 	uint64_t        emulationTargetFlags;
+#ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
+	bam_emulated_queue_pair *pDevQueuePairs;
+	bam_emulated_target_control *pDevTgt_control; //managed, shared with device
+#endif	
 #endif
 
 #ifdef __DIS_CLUSTER__
@@ -166,8 +170,8 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 		printf("Controller Init :BAM_EMU_TARGET_ENABLE pEmu = %p ctrl = %p numQueues = %ld\n", pEmu, ctrl, numQueues);
 
 		ns.lba_data_size = 512;
-		n_cqs = numQueues;
-		n_sqs = numQueues;
+		n_cqs = 511;
+		n_sqs = 511;
 		mmFlag = cudaHostRegisterDefault;
 		
 	}	
@@ -195,9 +199,12 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 	
 	initializeController(*this, ns_id);
 
-	printf("CALL cudaHOstRegister = %p, %d, %d\n", ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag );
+	printf("CALL cudaHOstRegister = %p, %d, %d mm_size = %d\n", ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag, ctrl->mm_size );
+
+
 	
-	cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag);
+//	cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag);
+	cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, ctrl->mm_size, mmFlag);
 
 	printf("cudaHostRegister err = %d\n", err);
 
@@ -243,6 +250,13 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     d_ctrl_buff = createBuffer(sizeof(Controller), cudaDevice);
     d_ctrl_ptr = d_ctrl_buff.get();
     cuda_err_chk(cudaMemcpy(d_ctrl_ptr, this, sizeof(Controller), cudaMemcpyHostToDevice));
+
+#ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
+	pDevQueuePairs = pEmu->tgt.pDevQPairs;
+	pDevTgt_control = pEmu->tgt.pTgt_control;
+#endif
+
+
 
 #ifdef BAM_EMU_COMPILE
 #ifdef BAM_EMU_START_EMU_POST_Q_CONFIG

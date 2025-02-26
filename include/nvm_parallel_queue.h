@@ -379,7 +379,7 @@ inline __device__
 uint32_t cq_poll(nvm_queue_t* cq, uint16_t search_cid, uint32_t* loc_ = NULL, uint32_t* cq_head = NULL) {
     uint64_t j = 0;
     unsigned int ns = 8;
-    //uint64_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    uint64_t tid = threadIdx.x + blockIdx.x * blockDim.x;
     //printf("---tid: %llu\tcid: %llu\tcq_start: %llx\n", (unsigned long long) (threadIdx.x+blockIdx.x*blockDim.x), (unsigned long long) (search_cid), (uint64_t) cq->vaddr);
     while (true) {
         uint32_t head = cq->head.load(simt::memory_order_relaxed);
@@ -417,6 +417,14 @@ uint32_t cq_poll(nvm_queue_t* cq, uint16_t search_cid, uint32_t* loc_ = NULL, ui
          if (ns < 256) {
              ns *= 2;
          }
+#endif
+
+#if 1
+		if(0 == (j % 1000000))
+		{
+			printf("cq_poll(%ld) j = %ld \n", tid, j);
+		}
+	
 #endif
     }
 }

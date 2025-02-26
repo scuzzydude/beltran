@@ -206,7 +206,7 @@ struct QueuePair
 
         // Get a valid device pointer for CQ doorbell
         void* devicePtr = nullptr;
-		//printf("QP CQ post mm_ptr = %p db = %p DIF  = %p\n", ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr));
+	//	printf("QP(%d) CQ post mm_ptr = %p db = %p DIF  = %p\n", qp_id, ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr));
 
         cudaError_t err = cudaHostGetDevicePointer(&devicePtr, (void*) this->cq.db, 0);
         if (err != cudaSuccess)

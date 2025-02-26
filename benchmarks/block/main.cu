@@ -157,20 +157,45 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 
     uint32_t ctrl;
     uint32_t queue;
-    if (laneid == 0) {
-	//ctrl = smid % (pc->n_ctrls);
+    if (laneid == 0) 
+	{
+	    //ctrl = smid % (pc->n_ctrls);
         ctrl = pc->ctrl_counter->fetch_add(1, simt::memory_order_relaxed) % (pc->n_ctrls);
         queue = ctrls[ctrl]->queue_counter.fetch_add(1, simt::memory_order_relaxed) %  (ctrls[ctrl]->n_qps);
         //queue = smid % (ctrls[ctrl]->n_qps);
     }
+
+
+	
     ctrl =  __shfl_sync(0xFFFFFFFF, ctrl, 0);
     queue =  __shfl_sync(0xFFFFFFFF, queue, 0);
+#ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
+		printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
+
+		if(tid < ctrls[ctrl]->n_qps)
+		{
+//			kernel_queueStream(1);
+			printf("random_access_kernel call(%ld) %p %p\n", tid, ctrls[ctrl]->pDevTgt_control, ctrls[ctrl]->pDevQueuePairs);
+			
+			kernel_queueStream(ctrls[ctrl]->pDevTgt_control, ctrls[ctrl]->pDevQueuePairs);
+			return;
+		}
+		else
+		{
+			n_reqs += ctrls[ctrl]->n_qps;
+		}
+#endif
 
 
-    if (tid < n_reqs) {
+    if (tid < n_reqs) 
+	{
         uint64_t start_block = (assignment[tid]*req_size) >> ctrls[ctrl]->d_qps[queue].block_size_log;
         //uint64_t start_block = (tid*req_size) >> ctrls[ctrl]->d_qps[queue].block_size_log;
         //start_block = tid;
+
+	
+		printf("random_access_kernel call(%ld) start_block = %ld\n", tid, start_block);
+	
         uint64_t n_blocks = req_size >> ctrls[ctrl]->d_qps[queue].block_size_log; /// ctrls[ctrl].ns.lba_data_size;;
         //printf("tid: %llu\tstart_block: %llu\tn_blocks: %llu\n", (unsigned long long) tid, (unsigned long long) start_block, (unsigned long long) n_blocks);
 
@@ -196,6 +221,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
         //printf("tid: %llu finished\n", (unsigned long long) tid);
 
     }
+	printf("random_access_kernel exit(%ld)\n", tid);
 
 }
 
@@ -284,6 +310,11 @@ int main(int argc, char** argv) {
         */
         uint64_t b_size = settings.blkSize;//64;
         uint64_t g_size = (settings.numThreads + b_size - 1)/b_size;//80*16;
+
+#ifdef  BAM_RUN_EMU_IN_BAM_KERNEL
+		g_size = (settings.numThreads + settings.numQueues + b_size - 1)/b_size;
+#endif
+		
         uint64_t n_threads = b_size * g_size;
 
 
@@ -292,7 +323,8 @@ int main(int argc, char** argv) {
         uint64_t total_cache_size = (page_size * n_pages);
         //uint64_t n_pages = total_cache_size/page_size;
         //
-        if (n_pages < n_threads) {
+        if (n_pages < n_threads) 
+		{
             std::cerr << "Please provide enough pages. Number of pages must be greater than or equal to the number of threads!\n";
             exit(1);
         }
@@ -356,7 +388,7 @@ int main(int argc, char** argv) {
 //		cuda_err_chk(cudaStreamCreate(&ctrls[0]->pEmu->tgt.bamStream));
 #ifdef BAM_EMU_START_EMU_POST_Q_CONFIG
 		printf("BAM_EMU_START_EMU_POST_Q_CONFIG start_emulation_target() CALL\n");
-		start_emulation_target(ctrls[0]->pEmu);
+//		start_emulation_target(ctrls[0]->pEmu);
 		printf("BAM_EMU_START_EMU_POST_Q_CONFIG start_emulation_target() RETURN\n");
 //		sleep(1);
 #endif
@@ -377,6 +409,9 @@ int main(int argc, char** argv) {
 #if 1
 
 
+//		cuda_err_chk(cudaStreamCreateWithFlags (&ctrls[0]->pEmu->tgt.bamStream, (cudaStreamNonBlocking)));
+		cuda_err_chk(cudaStreamCreateWithFlags (&ctrls[0]->pEmu->tgt.bamStream, (cudaStreamDefault)));
+
 
         if (settings.random)
         {
@@ -388,18 +423,20 @@ int main(int argc, char** argv) {
 		else
             sequential_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, settings.numReqs, settings.accessType, d_access_assignment);
 
+		printf("call bam kernel done\n");
+
+#ifndef  BAM_RUN_EMU_IN_BAM_KERNEL
+
+		start_emulation_target(ctrls[0]->pEmu);
+#endif
 
 #endif
 		
 		printf("kicked off io kernel, return\n");
 		cudaStreamSynchronize(ctrls[0]->pEmu->tgt.bamStream);
 		printf("cudaStreamSynchronize return\n");
-		
+
 	
-		ctrls[0]->pEmu->bRun = 0;
-		sleep(1);
-		
-		
 //		cleanup_emulator_target(ctrls[0]->pEmu);
 //		printf("EXIT!!!!\n");
 //		exit(0);
