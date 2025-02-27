@@ -632,7 +632,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 #endif
 
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_ERROR, BAM_DBG_CODE_PATH_D_KER_QSTRM);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_KER_QSTRM);
 	uint32_t count = 0;
 #ifndef RESIDENT_STREAM_DEBUG
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -721,7 +721,7 @@ __global__ void dummy_queueStream(bam_emulated_target_control    *pMgtTgtControl
 
 static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number, int bEnable = 1)
 {
-	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_UPDATEDQ);
+	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_UPDATEDQ);
 	bam_emulated_queue_pair aQP;
 	uint16_t q_idx = q_number - 1;
 	

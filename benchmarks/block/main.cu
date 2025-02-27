@@ -170,12 +170,10 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
     ctrl =  __shfl_sync(0xFFFFFFFF, ctrl, 0);
     queue =  __shfl_sync(0xFFFFFFFF, queue, 0);
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
-		printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
+	//	printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
 
 		if(tid < ctrls[ctrl]->n_qps)
 		{
-//			kernel_queueStream(1);
-			printf("random_access_kernel call(%ld) %p %p\n", tid, ctrls[ctrl]->pDevTgt_control, ctrls[ctrl]->pDevQueuePairs);
 			
 			kernel_queueStream(ctrls[ctrl]->pDevTgt_control, ctrls[ctrl]->pDevQueuePairs);
 			return;
@@ -195,8 +193,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
         //start_block = tid;
 
 	
-		printf("random_access_kernel call(%ld) start_block = %ld\n", tid, start_block);
-	
+		
         uint64_t n_blocks = req_size >> ctrls[ctrl]->d_qps[queue].block_size_log; /// ctrls[ctrl].ns.lba_data_size;;
         //printf("tid: %llu\tstart_block: %llu\tn_blocks: %llu\n", (unsigned long long) tid, (unsigned long long) start_block, (unsigned long long) n_blocks);
 
@@ -226,7 +223,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
 	uint64_t active_threads;
 	active_threads = ctrls[ctrl]->thread_counter.fetch_sub(1, simt::memory_order_relaxed);
-	printf("random_access_kernel exit(%ld) active_threads = %ld\n", tid, active_threads);
+//	printf("random_access_kernel exit(%ld) active_threads = %ld\n", tid, active_threads);
 	if(1 == active_threads)
 	{
 		ctrls[ctrl]->pDevTgt_control->bRun = 0;
