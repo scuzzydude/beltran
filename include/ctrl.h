@@ -67,6 +67,9 @@ struct Controller
 #ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
 	bam_emulated_queue_pair *pDevQueuePairs;
 	bam_emulated_target_control *pDevTgt_control; //managed, shared with device
+	simt::atomic<uint64_t, simt::thread_scope_device> thread_counter;
+
+	
 #endif	
 #endif
 
@@ -215,7 +218,9 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 	}
 
 	
-
+#ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
+	thread_counter = 0;
+#endif	
     queue_counter = 0;
     page_size = ctrl->page_size;
     blk_size = this->ns.lba_data_size;

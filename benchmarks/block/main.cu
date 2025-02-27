@@ -182,6 +182,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 		}
 		else
 		{
+			ctrls[ctrl]->thread_counter.fetch_add(1, simt::memory_order_relaxed);
 			n_reqs += ctrls[ctrl]->n_qps;
 		}
 #endif
@@ -221,7 +222,18 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
         //printf("tid: %llu finished\n", (unsigned long long) tid);
 
     }
-	printf("random_access_kernel exit(%ld)\n", tid);
+
+#ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
+	uint64_t active_threads;
+	active_threads = ctrls[ctrl]->thread_counter.fetch_sub(1, simt::memory_order_relaxed);
+	printf("random_access_kernel exit(%ld) active_threads = %ld\n", tid, active_threads);
+	if(1 == active_threads)
+	{
+		ctrls[ctrl]->pDevTgt_control->bRun = 0;
+	}
+#endif			
+
+
 
 }
 
@@ -407,6 +419,11 @@ int main(int argc, char** argv) {
 #endif
 		sleep(1);
 #if 1
+
+#ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
+		ctrls[0]->pDevTgt_control->thread_count = n_threads;
+#endif
+		
 
 
 //		cuda_err_chk(cudaStreamCreateWithFlags (&ctrls[0]->pEmu->tgt.bamStream, (cudaStreamNonBlocking)));

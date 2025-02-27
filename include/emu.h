@@ -180,6 +180,8 @@ typedef struct
 		int                     nOneShot;
 		int                     rsvd;
 		char                    szName[32];
+		uint64_t                thread_count;
+		
 		
 } bam_emulated_target_control;
 	
@@ -202,6 +204,8 @@ typedef struct
 	bam_emulated_target_control *pTgt_control; //managed, shared with device
 	
 	bam_emulated_queue_pair        *pDevQPairs;
+
+
 	
 } bam_target_emulator;
 
