@@ -164,7 +164,14 @@ uint32_t move_head_sq(nvm_queue_t* q, uint32_t cur_head) {
 
 inline __device__ void write_doorbell(volatile uint32_t* db, uint32_t new_db)
 {
+
+#ifdef BAM_EMU_COMPILE 
+#if (BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_MAPPED_FILE)
 	asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(db),"r"(new_db) : "memory");
+#endif
+#else
+	asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(db),"r"(new_db) : "memory");
+#endif
 }
 
 
