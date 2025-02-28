@@ -403,17 +403,6 @@ int main(int argc, char** argv) {
 #endif
 
 
-#ifdef BAM_EMU_APP_LAYER_EMU_DUMMY
-		printf("BAM_EMU_APP_LAYER_EMU_DUMMY start kernel g_size = %ld b_size = %ld\n", g_size, b_size);
-//		dummy_queueStream<<<1,1,0,ctrls[0]->pEmu->tgt.tgtStream>>>(ctrls[0]->pEmu->tgt.pTgt_control, ctrls[0]->pEmu->tgt.pDevQPairs);
-
-		pthread_create(&ctrls[0]->pEmu->emu_threads[1], NULL, launch_dummy_target, ctrls[0]->pEmu); 
-
-		printf("BAM_EMU_APP_LAYER_EMU_DUMMY start kernel return \n");
-#endif
-#ifdef BAM_EMU_APP_LAYER_BAM_DUMMY
-
-#endif
 		sleep(1);
 #if 1
 

@@ -235,11 +235,6 @@ typedef struct
 #define BAM_EMU_START_EMU_IN_APP_LAYER
 
 #define BAM_EMU_TARGET_HOST_THREAD
-//#define BAM_EMU_LAUNCH_DUMMY_THREAD
-//#define BAM_EMU_LAUNCH_BAM_DUMMY_IN_START_EMU
-//#define BMA_EMU_DISABLE_LAUNCH_EMU_THREAD
-//#define BAM_EMU_APP_LAYER_EMU_DUMMY
-//#define BAM_EMU_APP_LAYER_BAM_DUMMY
 //#define BAM_EMU_QTHREAD_ONE_SHOT
 
 //using SCSI terminology, data-in from Host -> target
@@ -938,38 +933,6 @@ void * launch_emu_target(void *pvEmu)
 	return NULL;
 }
 
-void * launch_dummy_target(void *pvEmu)
-{
-	bam_host_emulator * pEmu = (bam_host_emulator *)pvEmu;
-	int             heartbeat_sec = 5;
-	int             count = 0;
-	int 			verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_THREAD);
-
-//	cuda_err_chk(cudaStreamCreateWithFlags (&pEmu->tgt.tgtStream, (cudaStreamDefault | cudaStreamNonBlocking)));
-//	cuda_err_chk(cudaStreamCreate(&pEmu->tgt.queueStream));
-
-	BAM_EMU_HOST_DBG_PRINT(verbose, "launch_emu_target(%d)\n", 0);
-
-
-
-	dummy_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.tgtStream>>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
-
-	BAM_EMU_HOST_DBG_PRINT(verbose, "dummy_queueStream RETURN(%d)\n", 0);
-
-
-	while(pEmu->bRun)
-	{
-		if(0 == (count % heartbeat_sec))
-		{
-			BAM_EMU_HOST_DBG_PRINT(verbose, "dummy_thread heartbeat(%d)\n", count);
-		}	
-		sleep(1);
-		count++;
-	}
-
-	return NULL;
-}
-
 
 
 __global__ void dummy_Stream(bam_emulated_target_control     *pMgtTgtControl)
@@ -1059,18 +1022,8 @@ static void start_emulation_target(bam_host_emulator *pEmu)
 #ifdef BAM_EMU_TARGET_HOST_THREAD
 	pEmu->bRun = 1;
 
-#ifdef	BMA_EMU_DISABLE_LAUNCH_EMU_THREAD
-
-#else
 	pthread_create(&pEmu->emu_threads[0], NULL, launch_emu_target, pEmu); 
-#endif
 
-#ifdef BAM_EMU_LAUNCH_DUMMY_THREAD
-	pthread_create(&pEmu->emu_threads[1], NULL, launch_dummy_target, pEmu); 
-#endif
-#ifdef BAM_EMU_LAUNCH_BAM_DUMMY_IN_START_EMU
-	pthread_create(&pEmu->emu_threads[2], NULL, bam_io_thread, pEmu); 
-#endif
 #else
 	try
 	{
