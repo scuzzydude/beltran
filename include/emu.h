@@ -286,6 +286,8 @@ __device__ uint32_t emu_tgt_read_doorbell(bam_emulated_queue *pEmuQ)
 	
 
 #else
+	//In this case, the pointer is mapped host (memory mapped file), and thus sequuenced and forced to be coherent with the applications BaM doorbell writes
+	//That's the theory, anyway.....
 	return *pEmuQ->db;
 #endif
 }
@@ -671,15 +673,9 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 #define EMU_KERNEL_ENTRY_TYPE __global__
 #endif
 
-//#define RESIDENT_STREAM_DEBUG
 
-#ifdef RESIDENT_STREAM_DEBUG
-//EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(int dummy)
+
 EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pDevQPairs)
-//EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control        *pMgtTgtControl)
-#else
-EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pDevQPairs)
-#endif
 
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_KER_QSTRM);
@@ -703,21 +699,9 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream bid = %d\n", bid);
 	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream smid = %d\n", smid);
 #endif
-#ifdef RESIDENT_STREAM_DEBUG
-	while(count < 10000000)
-#else
 	while(pMgtTgtControl->bRun)
-#endif
 	{
 
-#ifdef RESIDENT_STREAM_DEBUG
-		__nanosleep(256);
-
-		if(0 == (count % 1000000))
-		{
-			BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream  %d count = %d x = %d\n", 0, count, 0);	
-		}
-#else
 
 		if(emu_tgt_SQ_Check(pMgtTgtControl, pQP))
 		{
@@ -728,7 +712,6 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 				emu_tgt_CQ_Drain(pMgtTgtControl, pQP, cq_db_head);
 			}
 		}
-#endif
 
 #ifdef BAM_EMU_QTHREAD_ONE_SHOT
 	    if(count >= pMgtTgtControl->nOneShot)
