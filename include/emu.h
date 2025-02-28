@@ -49,7 +49,7 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_EMU_MAX_QUEUES 1024
 
 //controls emulation compile and benchmark enablement
-//#define BAM_EMU_COMPILE 
+#define BAM_EMU_COMPILE 
 #define BAM_RUN_EMU_IN_BAM_KERNEL
 
 #define BAM_EMU_TARGET_DISABLE    0
@@ -140,7 +140,8 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 #define EMU_DB_MEM_MAPPED_FILE        1  
 #define EMU_DB_MEM_ATOMIC_GLOBAL      2  
 
-#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
+//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
+#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_GLOBAL
 
 
 
@@ -260,11 +261,13 @@ typedef struct
 #define BAM_EMU_DATA_OUT 1
 typedef ulonglong4 emu_copy_type;
 
-volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator *pEmu, nvm_queue_t *pQueue)
+volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator *pEmu, nvm_queue_t *pQueue, int *pNeedDevicePtr)
 {
+		*pNeedDevicePtr = 1;
 
 #if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL) 
-		return ((0 != cq) ? &pEmu->tgt.pTgt_control->atomic_doorbells[qidx].cq_db : &pEmu->tgt.pTgt_control->atomic_doorbells[qidx].sq_db);
+		*pNeedDevicePtr = 0;
+		return ((0 != cq) ? (uint32_t *)&pEmu->tgt.pTgt_control->atomic_doorbells[qidx].cq_db : (uint32_t *)&pEmu->tgt.pTgt_control->atomic_doorbells[qidx].sq_db);
 
 #else
 		//pEmu will be NULL if normal BaM compile or if File mapped, no redirection neccessary
@@ -274,6 +277,19 @@ volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator 
 
 
 }
+
+__device__ uint32_t emu_tgt_read_doorbell(bam_emulated_queue *pEmuQ)
+{
+#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL) 
+	auto atomic_casted = reinterpret_cast<simt::atomic<uint32_t, simt::thread_scope_device>*>(const_cast<uint32_t*>(pEmuQ->db));
+	return atomic_casted->load(simt::memory_order_relaxed);
+	
+
+#else
+	return *pEmuQ->db;
+#endif
+}
+
 
 
 __device__ void emu_tgt_DMA(void *dst_addr, void *src_addr, int copy_size, int direction)
@@ -552,8 +568,11 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 	int count = 0;
 	uint32_t cq_db_head;
 
-	cq_db_head = *pQP->cQ.db;
-	
+//	cq_db_head = *pQP->cQ.db;
+
+	cq_db_head = emu_tgt_read_doorbell(&pQP->cQ);
+
+
 	while(pQP->sQ.head != pQP->sQ.tail)
 	{
 			
@@ -622,8 +641,10 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check() cmd[0] = 0x%08x cmd[1] = 0x%08x \n", pCmd->dword[0], pCmd->dword[1]);
 			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check() db = %p  db = %p \n", pQP->cQ.db, pQP->sQ.db);
 	
-			db_tail = *pQP->sQ.db;
+			//db_tail = *pQP->sQ.db;
 
+			db_tail = emu_tgt_read_doorbell(&pQP->sQ);
+			
 				
 			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check() db = %d	head = %d \n",  db_tail, pQP->sQ.head);
 
