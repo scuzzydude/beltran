@@ -394,25 +394,12 @@ int main(int argc, char** argv) {
         }
         std::cout << "atlaunch kernel\n";
 #ifdef BAM_EMU_COMPILE 
-//		cuda_err_chk(cudaStreamCreate(&ctrls[0]->pEmu->tgt.bamStream));
-#ifdef BAM_EMU_START_EMU_POST_Q_CONFIG
-		printf("BAM_EMU_START_EMU_POST_Q_CONFIG start_emulation_target() CALL\n");
-//		start_emulation_target(ctrls[0]->pEmu);
-		printf("BAM_EMU_START_EMU_POST_Q_CONFIG start_emulation_target() RETURN\n");
-//		sleep(1);
-#endif
-
-
-		sleep(1);
-#if 1
-
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
 		ctrls[0]->pDevTgt_control->thread_count = n_threads;
 #endif
 		
 
 
-//		cuda_err_chk(cudaStreamCreateWithFlags (&ctrls[0]->pEmu->tgt.bamStream, (cudaStreamNonBlocking)));
 		cuda_err_chk(cudaStreamCreateWithFlags (&ctrls[0]->pEmu->tgt.bamStream, (cudaStreamDefault)));
 
 
@@ -421,7 +408,6 @@ int main(int argc, char** argv) {
 			std::cout << "calling random_access_kernel" << std::endl;
  
             random_access_kernel<<<g_size, b_size, 0, ctrls[0]->pEmu->tgt.bamStream>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
-//            random_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
         }
 		else
             sequential_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, settings.numReqs, settings.accessType, d_access_assignment);
@@ -429,20 +415,9 @@ int main(int argc, char** argv) {
 		printf("call bam kernel done\n");
 
 #ifndef  BAM_RUN_EMU_IN_BAM_KERNEL
-
 		start_emulation_target(ctrls[0]->pEmu);
 #endif
-
-#endif
-		
-		printf("kicked off io kernel, return\n");
 		cudaStreamSynchronize(ctrls[0]->pEmu->tgt.bamStream);
-		printf("cudaStreamSynchronize return\n");
-
-	
-//		cleanup_emulator_target(ctrls[0]->pEmu);
-//		printf("EXIT!!!!\n");
-//		exit(0);
 #else
 
         if (settings.random)
@@ -473,9 +448,12 @@ int main(int argc, char** argv) {
         uint64_t data = ios*page_size;
         double iops = ((double)ios)/(elapsed/1000000);
         double bandwidth = (((double)data)/(elapsed/1000000))/(1024ULL*1024ULL*1024ULL);
-        std::cout << std::dec << "Elapsed Time: " << elapsed << "\tNumber of Ops: "<< ios << "\tData Size (bytes): " << data << std::endl;
+        std::cout << std::dec << "Elapsed Time: " << elapsed << " us\tNumber of Ops: "<< ios << "\tData Size (bytes): " << data << std::endl;
         std::cout << std::dec << "Ops/sec: " << iops << "\tEffective Bandwidth(GB/S): " << bandwidth << std::endl;
-        h_pc.print_reset_stats();
+
+		printf("IOPs = %f\n", iops);
+
+		h_pc.print_reset_stats();
         //std::cout << std::dec << ctrls[0]->ns.lba_data_size << std::endl;
 
         //std::ofstream ofile("../data", std::ios::binary | std::ios::trunc);
