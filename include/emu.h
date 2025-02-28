@@ -50,7 +50,14 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 
 //controls emulation compile and benchmark enablement
 #define BAM_EMU_COMPILE 
+
 #define BAM_RUN_EMU_IN_BAM_KERNEL
+
+
+//TODO:  This is interesting.  I calcuated the amount of Q control memory with this option and pass it into the kernel
+//However, I never explicity reference this shared memory in the kernel.  However, my IOPs with basic loopback went from 40M to 144M with this simple change
+
+#define BAM_EMU_USE_SHARED_Q_MEM
 
 #define BAM_EMU_TARGET_DISABLE    0
 #define BAM_EMU_TARGET_ENABLE     0x00000001
@@ -139,21 +146,29 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 
 #define EMU_DB_MEM_MAPPED_FILE        1  
 #define EMU_DB_MEM_ATOMIC_GLOBAL      2  
+#define EMU_DB_MEM_ATOMIC_DEVICE      3
+
 
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
-#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_GLOBAL
+//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_GLOBAL
+#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
 
 
 typedef struct
 {	
+
+#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_DEVICE) 
+	simt::atomic<uint32_t, simt::thread_scope_device> atomic_db;
+	uint8_t pad0[28];
+#endif
+
 	uint16_t 			q_number;  
 	uint16_t 			q_size;
 	uint16_t            q_size_minus_1;
-	uint16_t 			rsvd;
-
 	uint8_t 			cq;
 	uint8_t 			enabled;
+
 	uint32_t            rollover;
 
 	
@@ -237,6 +252,7 @@ typedef struct
 	int id;
 	int g_size;
 	int b_size;
+	int shared_size;
 	
 	bam_target_emulator   tgt;
 	nvm_ctrl_t            *pCtrl;
@@ -268,7 +284,9 @@ volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator 
 #if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL) 
 		*pNeedDevicePtr = 0;
 		return ((0 != cq) ? (uint32_t *)&pEmu->tgt.pTgt_control->atomic_doorbells[qidx].cq_db : (uint32_t *)&pEmu->tgt.pTgt_control->atomic_doorbells[qidx].sq_db);
-
+#elif(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_DEVICE) 
+		*pNeedDevicePtr = 0;
+		return pQueue->db;
 #else
 		//pEmu will be NULL if normal BaM compile or if File mapped, no redirection neccessary
 		return pQueue->db;
@@ -280,15 +298,14 @@ volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator 
 
 __device__ uint32_t emu_tgt_read_doorbell(bam_emulated_queue *pEmuQ)
 {
-#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL) 
-	auto atomic_casted = reinterpret_cast<simt::atomic<uint32_t, simt::thread_scope_device>*>(const_cast<uint32_t*>(pEmuQ->db));
-	return atomic_casted->load(simt::memory_order_relaxed);
-	
-
-#else
+#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_MAPPED_FILE) 
 	//In this case, the pointer is mapped host (memory mapped file), and thus sequuenced and forced to be coherent with the applications BaM doorbell writes
 	//That's the theory, anyway.....
 	return *pEmuQ->db;
+
+#else
+	auto atomic_casted = reinterpret_cast<simt::atomic<uint32_t, simt::thread_scope_device>*>(const_cast<uint32_t*>(pEmuQ->db));
+	return atomic_casted->load(simt::memory_order_relaxed);
 #endif
 }
 
@@ -1321,8 +1338,16 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	
 	pEmu->tgt.pDevQPairs = (bam_emulated_queue_pair *)pEmu->tgt.d_queue_q_mem.get()->vaddr;
 
-	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() pEmu->tgt.pDevQPairs = %p &tgt.queuePairs = %p, qall_size = %ld\n", pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size);
+	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() pEmu->tgt.pDevQPairs = %p &tgt.queuePairs = %p, qall_size = %ld bam_emulated_target_control = %d \n", pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size, sizeof(bam_emulated_target_control));
 
+#ifdef	BAM_EMU_USE_SHARED_Q_MEM
+	pEmu->shared_size = qall_size;// +  sizeof(bam_emulated_target_control) + 4096;
+#else
+	pEmu->shared_size = 0;
+#endif
+
+
+	
 	cuda_err_chk(cudaMemcpy(pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size, cudaMemcpyHostToDevice));
 
 //	pEmu->tgt.d_target_control_mem = createDma(pEmu->pCtrl, NVM_PAGE_ALIGN(sizeof(bam_emulated_target_control), 1UL << 16), pEmu->cudaDevice);

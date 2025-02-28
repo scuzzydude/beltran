@@ -169,9 +169,9 @@ inline __device__ void write_doorbell(volatile uint32_t* db, uint32_t new_db)
 #if (BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_MAPPED_FILE)
 	//No differnce in mechanism, as doorbell is a memory mapped file with emulator, a memory mapped PCIe device with vanilla BaM
 	asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(db),"r"(new_db) : "memory");
-#elif (BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL)
-		auto atomic_casted = reinterpret_cast<simt::atomic<uint32_t, simt::thread_scope_device>*>(const_cast<uint32_t*>(db));
-		atomic_casted->store(new_db, simt::memory_order_release);
+#else
+	auto atomic_casted = reinterpret_cast<simt::atomic<uint32_t, simt::thread_scope_device>*>(const_cast<uint32_t*>(db));
+	atomic_casted->store(new_db, simt::memory_order_release);
 #endif
 #else
 	asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(db),"r"(new_db) : "memory");

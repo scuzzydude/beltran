@@ -175,6 +175,20 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 
 		if(tid < ctrls[ctrl]->n_qps)
 		{
+
+#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_DEVICE) 
+			//Have to derefence to atomic_db in device code before doorbells are rang
+			bam_emulated_queue_pair *pQPs = &ctrls[ctrl]->pDevQueuePairs[tid];
+			pQPs->cQ.db = (uint32_t *)&pQPs->cQ.atomic_db;
+			pQPs->sQ.db = (uint32_t *)&pQPs->sQ.atomic_db;
+
+			//now fix up the doorbells on the "applicaiton (GPU)" side
+			//this is a race because the threads > n_qps may execute first but we can't sync without slowing down the IOP/s
+			ctrls[ctrl]->d_qps[tid].cq.db = (uint32_t *)&pQPs->cQ.atomic_db;
+			ctrls[ctrl]->d_qps[tid].sq.db = (uint32_t *)&pQPs->sQ.atomic_db;
+		 	
+#endif
+
 			
 			kernel_queueStream(ctrls[ctrl]->pDevTgt_control, ctrls[ctrl]->pDevQueuePairs);
 			return;
@@ -408,7 +422,7 @@ int main(int argc, char** argv) {
         {
 			std::cout << "calling random_access_kernel" << std::endl;
  
-            random_access_kernel<<<g_size, b_size, 0, ctrls[0]->pEmu->tgt.bamStream>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
+            random_access_kernel<<<g_size, b_size, ctrls[0]->pEmu->shared_size, ctrls[0]->pEmu->tgt.bamStream>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
         }
 		else
             sequential_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, settings.numReqs, settings.accessType, d_access_assignment);
