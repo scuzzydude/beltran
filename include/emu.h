@@ -45,10 +45,11 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 	return gbs;
 }
 
+//no reason this can't be 64K, just need to massage some stuff
 #define BAM_EMU_MAX_QUEUES 1024
 
 //controls emulation compile and benchmark enablement
-#define BAM_EMU_COMPILE 
+//#define BAM_EMU_COMPILE 
 #define BAM_RUN_EMU_IN_BAM_KERNEL
 
 #define BAM_EMU_TARGET_DISABLE    0
@@ -129,11 +130,17 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 #define BAM_EMU_HOST_DBG_PRINT(__verbose, __format, ...) do { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) bam_emu_dbg_printf(__verbose, __format, __VA_ARGS__); } while (0)
 //Kludge because of vprintf in device code
 //Not big deal these should only be used for debug anyway
-#define BAM_EMU_DEV_DBG_PRINT1(__verbose, __format, _v1) do { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1); } while (0)
-#define BAM_EMU_DEV_DBG_PRINT2(__verbose, __format, _v1, _v2) do { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2); } while (0)
-#define BAM_EMU_DEV_DBG_PRINT3(__verbose, __format, _v1, _v2, _v3) do { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2, _v3); } while (0)
+#define BAM_EMU_DEV_DBG_PRINT1(__verbose, __format, _v1) do                { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1); } while (0)
+#define BAM_EMU_DEV_DBG_PRINT2(__verbose, __format, _v1, _v2) do           { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2); } while (0)
+#define BAM_EMU_DEV_DBG_PRINT3(__verbose, __format, _v1, _v2, _v3) do      { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2, _v3); } while (0)
 #define BAM_EMU_DEV_DBG_PRINT4(__verbose, __format, _v1, _v2, _v3, _v4) do { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2, _v3, _v4); } while (0)
 
+
+
+#define EMU_DB_MEM_MAPPED_FILE        1  
+#define EMU_DB_MEM_ATOMIC_GLOBAL      2  
+
+#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
 
 
 
@@ -181,7 +188,18 @@ typedef struct
 		int                     rsvd;
 		char                    szName[32];
 		uint64_t                thread_count;
-		
+
+#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL) 
+		struct
+		{
+			simt::atomic<uint32_t, simt::thread_scope_device> cq_db;
+    		uint8_t pad0[28];
+    		simt::atomic<uint32_t, simt::thread_scope_device> sq_db;
+    		uint8_t pad1[28];
+   
+
+		} atomic_doorbells[BAM_EMU_MAX_QUEUES];
+#endif
 		
 } bam_emulated_target_control;
 	
@@ -241,6 +259,22 @@ typedef struct
 #define BAM_EMU_DATA_IN  0
 #define BAM_EMU_DATA_OUT 1
 typedef ulonglong4 emu_copy_type;
+
+volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator *pEmu, nvm_queue_t *pQueue)
+{
+
+#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL) 
+		return ((0 != cq) ? &pEmu->tgt.pTgt_control->atomic_doorbells[qidx].cq_db : &pEmu->tgt.pTgt_control->atomic_doorbells[qidx].sq_db);
+
+#else
+		//pEmu will be NULL if normal BaM compile or if File mapped, no redirection neccessary
+		return pQueue->db;
+#endif	
+
+
+
+}
+
 
 __device__ void emu_tgt_DMA(void *dst_addr, void *src_addr, int copy_size, int direction)
 {

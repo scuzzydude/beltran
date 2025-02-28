@@ -193,7 +193,7 @@ struct QueuePair
 	}
 
 	
-    inline QueuePair( const nvm_ctrl_t* ctrl, const uint32_t cudaDevice, const struct nvm_ns_info ns, const struct nvm_ctrl_info info, nvm_aq_ref& aq_ref, const uint16_t qp_id, const uint64_t queueDepth)
+    inline QueuePair( const nvm_ctrl_t* ctrl, const uint32_t cudaDevice, const struct nvm_ns_info ns, const struct nvm_ctrl_info info, nvm_aq_ref& aq_ref, const uint16_t qp_id, const uint64_t queueDepth, bam_host_emulator *pEmu = NULL)
     {
 		queue_pair_prepare(ctrl,cudaDevice, ns, info, qp_id, queueDepth);
 
@@ -207,6 +207,9 @@ struct QueuePair
         // Get a valid device pointer for CQ doorbell
         void* devicePtr = nullptr;
 	//	printf("QP(%d) CQ post mm_ptr = %p db = %p DIF  = %p\n", qp_id, ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr));
+
+
+		this->cq.db = emu_host_get_db_pointer((qp_id - 1), 1, pEmu, &this->cq);
 
         cudaError_t err = cudaHostGetDevicePointer(&devicePtr, (void*) this->cq.db, 0);
         if (err != cudaSuccess)
@@ -231,6 +234,9 @@ struct QueuePair
 
 
         // Get a valid device pointer for SQ doorbell
+
+		this->sq.db = emu_host_get_db_pointer((qp_id - 1), 0, pEmu, &this->sq);
+
         err = cudaHostGetDevicePointer(&devicePtr, (void*) this->sq.db, 0);
         if (err != cudaSuccess)
         {

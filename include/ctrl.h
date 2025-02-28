@@ -61,15 +61,14 @@ struct Controller
     void* d_ctrl_ptr;
     BufferPtr d_ctrl_buff;
 
-#ifdef BAM_EMU_COMPILE
 	bam_host_emulator *pEmu;
 	uint64_t        emulationTargetFlags;
+
+#ifdef BAM_EMU_COMPILE
 #ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
 	bam_emulated_queue_pair *pDevQueuePairs;
 	bam_emulated_target_control *pDevTgt_control; //managed, shared with device
 	simt::atomic<uint64_t, simt::thread_scope_device> thread_counter;
-
-	
 #endif	
 #endif
 
@@ -163,6 +162,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     , aq_ref(nullptr)
     , deviceId(cudaDevice)
 {
+	pEmu = NULL;
 	unsigned int mmFlag = cudaHostRegisterIoMemory;
 #ifdef BAM_EMU_COMPILE
 	if(emulationTarget & BAM_EMU_TARGET_ENABLE)
@@ -217,10 +217,12 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 		throw error(string("Unexpected error while mapping IO memory (cudaHostRegister): ") + cudaGetErrorString(err));
 	}
 
-	
+#ifdef BAM_EMU_COMPILE	
 #ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
 	thread_counter = 0;
-#endif	
+#endif
+#endif
+
     queue_counter = 0;
     page_size = ctrl->page_size;
     blk_size = this->ns.lba_data_size;
@@ -234,7 +236,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     for (size_t i = 0; i < n_qps; i++) 
 	{
  //       printf("started creating qp\n");
-        h_qps[i] = new QueuePair(ctrl, cudaDevice, ns, info, aq_ref, i+1, queueDepth);
+        h_qps[i] = new QueuePair(ctrl, cudaDevice, ns, info, aq_ref, i+1, queueDepth, pEmu);
  //       printf("finished creating qp\n");
         cuda_err_chk(cudaMemcpy(d_qps+i, h_qps[i], sizeof(QueuePair), cudaMemcpyHostToDevice));
  //       printf("finished copy QP Memory to device\n");
@@ -259,10 +261,12 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     }
     printf("finished creating all qps\n");
 
+#ifdef BAM_EMU_COMPILE	
 #ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
 		pDevQueuePairs = pEmu->tgt.pDevQPairs;
 		printf("pDevQueuePairs = %p pEmu->tgt.pDevQPairs =%p\n", pDevQueuePairs, pEmu->tgt.pDevQPairs);
 		pDevTgt_control = pEmu->tgt.pTgt_control;
+#endif
 #endif
 
     

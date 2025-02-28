@@ -169,6 +169,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 	
     ctrl =  __shfl_sync(0xFFFFFFFF, ctrl, 0);
     queue =  __shfl_sync(0xFFFFFFFF, queue, 0);
+#ifdef BAM_EMU_COMPILE	
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
 	//	printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
 
@@ -183,6 +184,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 			ctrls[ctrl]->thread_counter.fetch_add(1, simt::memory_order_relaxed);
 			n_reqs += ctrls[ctrl]->n_qps;
 		}
+#endif
 #endif
 
 
@@ -220,15 +222,17 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 
     }
 
+#ifdef BAM_EMU_COMPILE	
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
 	uint64_t active_threads;
 	active_threads = ctrls[ctrl]->thread_counter.fetch_sub(1, simt::memory_order_relaxed);
-//	printf("random_access_kernel exit(%ld) active_threads = %ld\n", tid, active_threads);
+
 	if(1 == active_threads)
 	{
 		ctrls[ctrl]->pDevTgt_control->bRun = 0;
 	}
 #endif			
+#endif
 
 
 
@@ -419,7 +423,7 @@ int main(int argc, char** argv) {
 
         if (settings.random)
         {
-			std::cout << "calling random_access_kernel" << std::endl;
+			std::cout << "calling random_access_kernel (default BaM)" << std::endl;
  
             random_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
         }
