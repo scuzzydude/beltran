@@ -397,9 +397,6 @@ int main(int argc, char** argv) {
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
 		ctrls[0]->pDevTgt_control->thread_count = n_threads;
 #endif
-		
-
-
 		cuda_err_chk(cudaStreamCreateWithFlags (&ctrls[0]->pEmu->tgt.bamStream, (cudaStreamDefault)));
 
 

@@ -162,6 +162,13 @@ uint32_t move_head_sq(nvm_queue_t* q, uint32_t cur_head) {
 
 }
 
+inline __device__ void write_doorbell(volatile uint32_t* db, uint32_t new_db)
+{
+	asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(db),"r"(new_db) : "memory");
+}
+
+
+
 typedef ulonglong4 copy_type;
 
 inline __device__
@@ -300,7 +307,8 @@ uint16_t sq_enqueue(nvm_queue_t* sq, nvm_cmd_t* cmd, simt::atomic<uint64_t, simt
                         *cur_pc_tail = pc_tail->load(simt::memory_order_acquire);
                     }
 //                    *(sq->db) = new_db;
-		    asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(sq->db),"r"(new_db) : "memory");
+//		    asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(sq->db),"r"(new_db) : "memory");
+					write_doorbell(sq->db, new_db);				
 //						printf("DBWRITE(%d) %p  new_db = %d\n", threadIdx.x, sq->db, new_db);
                     //sq->tail_copy.store(new_tail, simt::memory_order_release);
 //	            printf("wrote SQ_db: %llu\tcur_tail: %llu\tmove_count: %llu\tsq_tail: %llu\tsq_head: %llu\n", (unsigned long long) new_db, (unsigned long long) cur_tail, (unsigned long long) tail_move_count, (unsigned long long) (new_tail),  (unsigned long long)(sq->head.load(simt::memory_order_acquire)));
@@ -419,13 +427,6 @@ uint32_t cq_poll(nvm_queue_t* cq, uint16_t search_cid, uint32_t* loc_ = NULL, ui
          }
 #endif
 
-#if 1
-		if(0 == (j % 1000000))
-		{
-			printf("cq_poll(%ld) j = %ld \n", tid, j);
-		}
-	
-#endif
     }
 }
 
@@ -486,8 +487,9 @@ void cq_dequeue(nvm_queue_t* cq, uint16_t pos, nvm_queue_t* sq, uint32_t loc_ = 
                     uint32_t new_db = (new_head) & (cq->qs_minus_1);
 
                     //*(cq->db) = new_db;
-                    asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(cq->db),"r"(new_db) : "memory");
-					
+//                    asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(cq->db),"r"(new_db) : "memory");
+					write_doorbell(cq->db, new_db); 			
+									
 //					printf("CQ Dequeue Doorbell = %d head_move_count = %d pos = %d\n", new_db, head_move_count, pos);
 					
 		    //cq->head_copy.store(new_head, simt::memory_order_release);
