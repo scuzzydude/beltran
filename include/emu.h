@@ -54,10 +54,6 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_RUN_EMU_IN_BAM_KERNEL
 
 
-//TODO:  This is interesting.  I calcuated the amount of Q control memory with this option and pass it into the kernel
-//However, I never explicity reference this shared memory in the kernel.  However, my IOPs with basic loopback went from 40M to 144M with this simple change
-
-#define BAM_EMU_USE_SHARED_Q_MEM
 
 #define BAM_EMU_TARGET_DISABLE    0
 #define BAM_EMU_TARGET_ENABLE     0x00000001
@@ -145,14 +141,19 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 
 
 #define EMU_DB_MEM_MAPPED_FILE        1  
-#define EMU_DB_MEM_ATOMIC_GLOBAL      2  
+#define EMU_DB_MEM_ATOMIC_MANAGED     2  
 #define EMU_DB_MEM_ATOMIC_DEVICE      3
 
 
+
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
-//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_GLOBAL
+//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
 #define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
+//TODO:  This is interesting.  I calcuated the amount of Q control memory with this option and pass it into the kernel
+//However, I never explicity reference this shared memory in the kernel.  However, my IOPs with basic loopback went from 40M to 144M with this simple change
+
+#define BAM_EMU_USE_SHARED_Q_MEM
 
 
 typedef struct
@@ -205,7 +206,7 @@ typedef struct
 		char                    szName[32];
 		uint64_t                thread_count;
 
-#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL) 
+#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_MANAGED) 
 		struct
 		{
 			simt::atomic<uint32_t, simt::thread_scope_device> cq_db;
@@ -281,7 +282,7 @@ volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator 
 {
 		*pNeedDevicePtr = 1;
 
-#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_GLOBAL) 
+#if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_MANAGED) 
 		*pNeedDevicePtr = 0;
 		return ((0 != cq) ? (uint32_t *)&pEmu->tgt.pTgt_control->atomic_doorbells[qidx].cq_db : (uint32_t *)&pEmu->tgt.pTgt_control->atomic_doorbells[qidx].sq_db);
 #elif(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_DEVICE) 
