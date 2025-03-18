@@ -51,7 +51,7 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 //controls emulation compile and benchmark enablement
 #define BAM_EMU_COMPILE 
 
-#define BAM_RUN_EMU_IN_BAM_KERNEL
+//#define BAM_RUN_EMU_IN_BAM_KERNEL
 
 
 
@@ -770,6 +770,7 @@ __global__ void dummy_queueStream(bam_emulated_target_control    *pMgtTgtControl
 
 //#define BAM_EMU_DOUBLE_CHECK_DEVICE_Q_COPY
 
+
 static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number, int bEnable = 1)
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_UPDATEDQ);
@@ -978,7 +979,7 @@ void * launch_emu_target(void *pvEmu)
 
 		cudaStreamSynchronize(pEmu->tgt.queueStream);
 #else	
-		sleep(10);
+		sleep(1);
 #endif
 
 		count++;

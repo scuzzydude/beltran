@@ -433,19 +433,29 @@ int main(int argc, char** argv) {
 		start_emulation_target(ctrls[0]->pEmu);
 #endif
 		cudaStreamSynchronize(ctrls[0]->pEmu->tgt.bamStream);
-#else
+#else /* ! BAM_EMU_COMPILE  */
 
         if (settings.random)
         {
-			std::cout << "calling random_access_kernel (default BaM)" << std::endl;
  
             random_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
         }
 		else
             sequential_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, settings.numReqs, settings.accessType, d_access_assignment);
 
-#endif
+
+#endif /* END #ifdef BAM_EMU_COMPILE */
         Event after;
+
+#ifdef BAM_EMU_COMPILE 
+#ifndef  BAM_RUN_EMU_IN_BAM_KERNEL
+		ctrls[0]->pEmu->tgt.pTgt_control->bRun = 0;
+		ctrls[0]->pEmu->bRun = 0;
+#endif
+#endif
+
+
+
 
         //print_cache_kernel<<<1,1>>>(d_pc);
         //new_kernel<<<1,1>>>();
