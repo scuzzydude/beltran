@@ -147,8 +147,8 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 
 
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
-//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
-#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
+#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
+//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
 //TODO:  This is interesting.  I calcuated the amount of Q control memory with this option and pass it into the kernel
 //However, I never explicity reference this shared memory in the kernel.  However, my IOPs with basic loopback went from 40M to 144M with this simple change
@@ -744,29 +744,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream oneshot = %d count = %d x = %d EXIT\n",0, count, 0);	
 }
 
-__global__ void dummy_queueStream(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pDevQPairs)
-{
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_KER_QSTRM);
-	int count = 0;
-	int ns_sleep_q_enabled = 1000000 * 700; 
-	const int display_freq = 3000;
-	
-	while(pMgtTgtControl->bRun)
-	{
-		
-		__nanosleep(ns_sleep_q_enabled);
-		
-		if((0 == count) || (0 == (count % display_freq)))
-		{
-	
-				BAM_EMU_DEV_DBG_PRINT1(verbose,"*TGT*: dummy_queueStream count = %d\n", count);
-		}
-		count++;
-	}
 
-	BAM_EMU_DEV_DBG_PRINT1(verbose,"*TGT*: dummy_queueStream EXIT, %d\n", count);
-
-}
 
 //#define BAM_EMU_DOUBLE_CHECK_DEVICE_Q_COPY
 
@@ -992,68 +970,6 @@ void * launch_emu_target(void *pvEmu)
 
 
 
-__global__ void dummy_Stream(bam_emulated_target_control     *pMgtTgtControl)
-{
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_KER_QSTRM);
-	int count = 0;
-	int ns_sleep_q_enabled = 1000000 * 800; 
-	const int display_freq = 2000;
-	
-	BAM_EMU_DEV_DBG_PRINT1(verbose,"BAM: dummy_Stream CALL = %d\n", count);
-	
-	while(pMgtTgtControl->bRun)
-	{
-		if((0 == count) || (0 == (count % display_freq)))
-		{
-			BAM_EMU_DEV_DBG_PRINT1(verbose,"BAM: dummy_Stream count = %d\n", count);
-		}
-		__nanosleep(ns_sleep_q_enabled);
-		count++;
-	}
-}
-
-#define DUMMY_IO_THREAD
-void * bam_io_thread(void *pvEmu)
-{
-	bam_host_emulator *pEmu = (bam_host_emulator *)pvEmu;
-//	launch_param *pL = (launch_param *)pvLaunchParam;	
-	
-	int count = 0;
-	
-	printf("bam_io_thread(%p)\n", pEmu);
-//	cuda_err_chk(cudaStreamCreateWithFlags (&bamStream, (cudaStreamNonBlocking)));
-//	cuda_err_chk(cudaStreamCreate(&pEmu->tgt.bamStream));
-
-//CUDA REference
-//https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#cuda-dynamic-parallelism
-#ifdef DUMMY_IO_THREAD
-	int limit = 100;	
-	dummy_Stream<<< 1, 1>>> (pEmu->tgt.pTgt_control);
-
-	while(pEmu->bRun)
-	{
-		if(0 == (count % 5))
-		{
-			//cudaError_t err = cudaStreamQuery(pEmu->tgt.bamStream);
-			int err = 0;
-			
-			printf("bam_io_thread count = %d  StreamQuery  = %d cudaErrorNotReady = %d \n", count, (int)err, (int)cudaErrorNotReady);
-		}
-		sleep(1);
-
-		count++;
-
-		if(count > limit)
-		{
-//			break;
-		}
-	}
-#endif
-
-	return NULL;
-
-}
-
 
 
 #endif
@@ -1065,15 +981,8 @@ static void start_emulation_target(bam_host_emulator *pEmu)
 	BAM_EMU_HOST_DBG_PRINT(verbose,"start_emulation_target(%p) g_size = %d b_size = %d\n", pEmu, pEmu->g_size, pEmu->b_size);
 
 	cuda_err_chk(cudaStreamCreateWithFlags (&pEmu->tgt.bamStream, (cudaStreamNonBlocking)));
-	//cuda_err_chk(cudaStreamCreateWithFlags (&pEmu->tgt.queueStream, (cudaStreamNonBlocking)));
-	//cuda_err_chk(cudaStreamCreateWithFlags (&pEmu->tgt.tgtStream, (cudaStreamNonBlocking)));
-
 
 	cuda_err_chk(cudaMemcpy(&pEmu->tgt.pDevQPairs[0], &pEmu->tgt.queuePairs[0], sizeof(bam_emulated_queue_pair) * BAM_EMU_MAX_QUEUES, cudaMemcpyHostToDevice));
-
-	
-//	printf("*** (%d) cq.db = %p sq.db = %p\n", 0, pEmu->tgt.queuePairs[0].cQ.db, pEmu->tgt.queuePairs[0].sQ.db);
-//	printf("*** (%d) cq.db = %p sq.db = %p\n", 1, pEmu->tgt.queuePairs[1].cQ.db, pEmu->tgt.queuePairs[1].sQ.db);
 
 
 #ifdef BAM_EMU_TARGET_HOST_THREAD
