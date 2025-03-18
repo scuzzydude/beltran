@@ -270,7 +270,12 @@ typedef struct
 #define BAM_EMU_START_EMU_POST_Q_CONFIG
 #define BAM_EMU_START_EMU_IN_APP_LAYER
 
-#define BAM_EMU_TARGET_HOST_THREAD
+
+
+//#define BAM_EMU_TARGET_HOST_THREAD
+
+
+
 //#define BAM_EMU_QTHREAD_ONE_SHOT
 
 //using SCSI terminology, data-in from Host -> target
@@ -930,9 +935,7 @@ void * launch_emu_target(void *pvEmu)
 #else
 
 #ifdef RESIDENT_STREAM_DEBUG
-//	kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pDevQPairs);
 	kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (5);
-//	kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control);
 #else
 	kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
 #endif
@@ -952,8 +955,7 @@ void * launch_emu_target(void *pvEmu)
 
 		}	
 #ifdef BAM_EMU_QTHREAD_ONE_SHOT
-					kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
-					//kernel_oneshotStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
+		kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
 
 		cudaStreamSynchronize(pEmu->tgt.queueStream);
 #else	
@@ -993,20 +995,11 @@ static void start_emulation_target(bam_host_emulator *pEmu)
 #else
 	try
 	{
-		h_szStr = (char *)malloc(ssize);
-		cuda_err_chk(cudaMalloc((void **) &d_szStr, ssize));
-//		cuda_err_chk(cudaStreamCreateWithFlags (&pEmu->tgt.queueStream, (cudaStreamDefault | cudaStreamNonBlocking)));
 		cuda_err_chk(cudaStreamCreate (&pEmu->tgt.queueStream));
-		
-		
-	//sync	kernel_queueStream<<<pEmu->g_size, pEmu->b_size>>>(pEmu->tgt.numQueues, d_szStr);
-		kernel_queueStream<<<pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream>>>(pEmu->tgt.pMgtTgtControl, pEmu->tgt.pDevQPairs);
+
+		kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
 
 		BAM_EMU_HOST_DBG_PRINT(verbose,"HOST: kernel_queueStream RETURN(%d)\n",0);
-		BAM_EMU_HOST_DBG_PRINT(verbose,"HOST: Sleep DONE(%s)\n", h_szStr);
-
-		
-
 
 	}
 	catch (const error& e) 
@@ -1260,9 +1253,6 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 
 	
 	cuda_err_chk(cudaMemcpy(pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size, cudaMemcpyHostToDevice));
-
-//	pEmu->tgt.d_target_control_mem = createDma(pEmu->pCtrl, NVM_PAGE_ALIGN(sizeof(bam_emulated_target_control), 1UL << 16), pEmu->cudaDevice);
-
 
 #ifdef	BAM_EMU_START_EMU_POST_Q_CONFIG
 	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() POSTPONING start_emulation_target() until after QConfig = %d (BAM_EMU_START_EMU_POST_Q_CONFIG)\n", 0);
