@@ -31,6 +31,11 @@
 
 #include <cuda/std/chrono>
 
+/* Emulation Headers */
+
+#include "emu_mapper.h"
+
+
 
 __device__	  inline  int64_t  NS_Clock() 
 {
@@ -713,15 +718,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
 #endif	
 	
-#if 0
-	uint32_t laneid = lane_id();
-	uint32_t bid = blockIdx.x;
-	uint32_t smid = get_smid();
-	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream tid = %ld\n", tid);
-	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream laneid = %d\n", laneid);
-	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream bid = %d\n", bid);
-	BAM_EMU_DEV_DBG_PRINT1(verbose,"TGT: kernel_queueStream smid = %d\n", smid);
-#endif
+
 	while(pMgtTgtControl->bRun)
 	{
 
