@@ -8,7 +8,6 @@
 * Currently only works with block benchmark
 * Current limitations
   * Tested with  1024 Queues 
-  * Using BAM_RUN_EMU_IN_BAM_KERNEL options (investigating resident stream problem)
 * Code valitation script is ./run in the /beltran subdirectory
   * unloads/loads libnvm
   * runs nvidia-smi (make sure GPU is there)
