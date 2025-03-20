@@ -161,6 +161,7 @@ typedef struct
 
 typedef struct 
 {
+	uint32_t uModelType;
 	
 	char szModelName[EMU_COMPONENT_NAME_LEN];
 

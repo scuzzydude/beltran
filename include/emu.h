@@ -34,6 +34,8 @@
 /* Emulation Headers */
 
 #include "emu_common.h"
+#include "emu_vendor.h"
+#include "emu_aggregation.h"
 #include "emu_mapper.h"
 
 
