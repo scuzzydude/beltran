@@ -142,10 +142,10 @@ typedef union
 
 typedef struct 
 {
-	storage_next_command cmd;
+	storage_next_command *pCmd;
 	//Used by each level or mapped as an implementation structure
 	//or a pointer holder if mapped to device/emulator managed memory
-	uint64_t    storage_implementation_context[8];  
+	uint64_t    storage_implementation_context[7];  
 } storage_next_emuluator_context;
 
 #define EMU_CONTEXT storage_next_emuluator_context
@@ -275,6 +275,8 @@ typedef struct
   
 	bam_emu_mapper                 mapper;
 
+	
+	BufferPtr                       d_mapper;
 	bam_emu_mapper                 *pDevMapper;  //device copy
 
 	

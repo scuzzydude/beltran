@@ -66,6 +66,16 @@ static inline void emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapTyp
 	}
 
 
+	pTgt->d_mapper = createBuffer(sizeof(bam_emu_mapper), pEmu->cudaDevice);
+	pTgt->pDevMapper = (bam_emu_mapper *)pTgt->d_mapper.get();
+
+	BAM_EMU_HOST_DBG_PRINT(verbose, "pDevMapper = %p size = %ld\n", mapType, sizeof(bam_emu_mapper));
+
+    cuda_err_chk(cudaMemcpy(pTgt->pDevMapper, &pTgt->mapper, sizeof(bam_emu_mapper), cudaMemcpyHostToDevice));
+
+
+
+
 	BAM_EMU_HOST_DBG_PRINT(verbose, "Initialized Mapper with type = %d (%s)\n", mapType, pTgt->mapper.szMapName);
 	BAM_EMU_HOST_DBG_PRINT(verbose, "Initialized Model  with type = %d (%s)\n", modelType, pTgt->mapper.model.szModelName);
 	
