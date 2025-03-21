@@ -13,7 +13,7 @@
 //*******************************************************************************************************
 //** Host Functions  
 //*******************************************************************************************************
-static inline char *get_vendor_model_name(void)
+static inline const char *get_vendor_model_name(void)
 {
 	return "Generice Vendor Model (non-functional)";
 }

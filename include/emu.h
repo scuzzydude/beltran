@@ -262,8 +262,6 @@ __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtCont
 	
 }
 
-#define BAM_EMU_TGT_NVME_LOOPBACK
-#define BAM_EMU_TGT_NVME_LOOPBACK_WITH_XFER
 
 
 
@@ -320,27 +318,34 @@ __device__ inline int emu_tgt_NVMe_loopback(bam_emulated_target_control    *pMgt
 	return 0;
 }
 
-__device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, nvm_cmd_t *pCmd, uint32_t cq_db_head)
+
+
+#ifdef BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
+__device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, storage_next_emuluator_context *pContext, uint32_t cq_db_head)
 {
+
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_EXE);
 	uint16_t cid;
 	uint8_t opcode;
 	uint64_t   lba;
 	int err;
+	nvm_cmd_t *pCmd = (nvm_cmd_t *)pContext->pCmd;
+
 	
 	cid = pCmd->dword[0] >> 16;
 	opcode = pCmd->dword[0] & 0x7f;
 	lba = ((uint64_t)pCmd->dword[11] << 32) | pCmd->dword[10];
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_NVMe_execute() cid = 0x%04x opcode = 0x%02x lba = %lx\n", cid, opcode, lba);
 
-#ifdef BAM_EMU_TGT_NVME_LOOPBACK
 	err = emu_tgt_NVMe_loopback(pMgtTgtControl, pQP, cid, cq_db_head);
-#else	
-	//deal with other targets
-#endif
 	return err;
 	
 }
+#else /* Normal Emulator Implementation */
+
+
+
+#endif
 
 
 __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, uint32_t *pSubmit_count)
@@ -350,6 +355,7 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 	nvm_cmd_t *pQ = &(((nvm_cmd_t *)(pQP->sQ.pEmuQ))[0]);
 	int count = 0;
 	uint32_t cq_db_head;
+	storage_next_emuluator_context *pContext;
 
 //	cq_db_head = *pQP->cQ.db;
 
@@ -362,8 +368,10 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 		BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_NVMe_Submit(%d) head = %d tail = %d\n", count, pQP->sQ.head, pQP->sQ.tail);
 
 		pCmd = &pQ[pQP->sQ.tail];
+		pContext = &pQP->pContext[pQP->sQ.tail];
+		pContext->pCmd = (storage_next_command *)pCmd;
 
-		if(emu_tgt_NVMe_execute(pMgtTgtControl, pQP, pCmd, cq_db_head))
+		if(emu_tgt_NVMe_execute(pMgtTgtControl, pQP, pContext, cq_db_head))
 		{
 			BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "TGT: emu_tgt_NVMe_execute(%d) ERROR!!!\n", pQP->q_number);
 		}
@@ -471,6 +479,8 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
 #endif	
 	
+//	BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "TGT: kernel_queueStream mapper = %s(%d)  model = %s(%d)\n" pMgtTgtControl-> 
+
 
 	while(pMgtTgtControl->bRun)
 	{
@@ -564,6 +574,7 @@ static void emulator_create_queue(bam_host_emulator *pEmu, uint16_t q_number, ui
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_CREATE_Q);
 	uint16_t q_idx = q_number - 1;
+	uint32_t context_size = 0;
 	
 	bam_emulated_queue *pQ;
 	
@@ -576,6 +587,7 @@ static void emulator_create_queue(bam_host_emulator *pEmu, uint16_t q_number, ui
 	else
 	{
 		pQ = &pEmu->tgt.queuePairs[q_idx].sQ;
+		context_size = q_size;
 	}
 
 	pQ->cq = cq;
@@ -584,9 +596,25 @@ static void emulator_create_queue(bam_host_emulator *pEmu, uint16_t q_number, ui
 	pQ->q_size_minus_1 = (q_size - 1);
 	pQ->q_number = q_number;
 	pQ->enabled = 1;
-	pQ->target_q_mem = createDma(pEmu->pCtrl, NVM_PAGE_ALIGN(q_size, 1UL << 16), pEmu->cudaDevice);
+
+
+	
+
+	/* One to One mapping of Command to context, so we can index directly and not have to manage a queue of contexts */
+	BAM_EMU_HOST_ASSERT(sizeof(storage_next_command) == sizeof(nvm_cmd_t));
+	BAM_EMU_HOST_ASSERT(sizeof(storage_next_command) == sizeof(storage_next_emuluator_context));
+	
+
+	pQ->target_q_mem = createDma(pEmu->pCtrl, NVM_PAGE_ALIGN(q_size + context_size, 1UL << 16), pEmu->cudaDevice);
+
 	pQ->pEmuQ = pQ->target_q_mem->vaddr;
-		
+
+	if(context_size)
+	{
+		pEmu->tgt.queuePairs[q_idx].pContext = (storage_next_emuluator_context *)((char *)pQ->target_q_mem->vaddr + q_size);
+
+	}
+	
 	BAM_EMU_HOST_DBG_PRINT(verbose, "emulator_create_queue() target_q_mem = %p\n", pQ->target_q_mem);
 
 	

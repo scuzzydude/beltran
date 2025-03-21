@@ -224,6 +224,8 @@ typedef struct
 
 	int                   qp_enabled;
 	int                   q_number;
+
+	storage_next_emuluator_context *pContext;
 	
 } bam_emulated_queue_pair;
 
@@ -249,6 +251,11 @@ typedef struct
 
 		} atomic_doorbells[BAM_EMU_MAX_QUEUES];
 #endif
+
+
+	BufferPtr                       d_mapper;
+	bam_emu_mapper                 *pDevMapper;  //device copy
+
 		
 } bam_emulated_target_control;
 	
@@ -276,9 +283,6 @@ typedef struct
 	bam_emu_mapper                 mapper;
 
 	
-	BufferPtr                       d_mapper;
-	bam_emu_mapper                 *pDevMapper;  //device copy
-
 	
 } bam_target_emulator;
 
@@ -322,6 +326,8 @@ typedef struct
 typedef ulonglong4 emu_copy_type;
 
 
+/* Early Simple Loopback w/o simulated latency or transfer */
+#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
 
 
 
