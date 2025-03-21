@@ -11,6 +11,12 @@
 //** Device Functions  
 //*******************************************************************************************************
 
+__device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext)
+{
+
+	return 0;
+}
+
 
 
 

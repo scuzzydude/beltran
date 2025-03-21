@@ -88,6 +88,58 @@ static inline void emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapTyp
 //** Device Functions  
 //*******************************************************************************************************
 
+__device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext)
+{
+
+	/* Device function pointers complicated in CUDA and using all inline functions */
+	/* If burdensome later on, we can make the Models compile time selectable */
+	switch(pDevMapper->model.uModelType)
+	{
+
+		case EMU_MODEL_TYPE_LATENCY:
+			return emu_model_latency_submit(&pDevMapper->model, pContext);
+			
+				
+		case EMU_MODEL_TYPE_AGGREGATION:
+			return emu_model_aggregation_submit(&pDevMapper->model, pContext);
+			
+		
+		case EMU_MODEL_TYPE_VENDOR:
+			return emu_model_vendor_submit(&pDevMapper->model, pContext);
+
+		default:
+		BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_map_model_submit() : Invalid Model Type %d\n", pDevMapper->model.uModelType);
+		break;
+		
+	}
+
+	return 1;
+
+}
+
+
+/* The mapper will be used later on to map to targets or map to other peer kernel threads based on data location (could be multi-path) or different kernel engines */ 
+__device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext)
+{
+
+	/* Device function pointers complicated in CUDA and using all inline functions */
+	/* If burdensome later on, we can make the Models compile time selectable */
+	switch(pDevMapper->uMapType)
+	{
+		case EMU_MAP_TYPE_DIRECT:
+			return emu_tgt_map_model_submit(pDevMapper, pContext);
+		
+		
+		
+		default:
+			BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_map_Submit() : Invalid Map Type %d\n", pDevMapper->uMapType);
+			break;
+
+
+	}
+
+	return 1;
+}
 
 
 #endif /* __EMU_MAPPER_H */

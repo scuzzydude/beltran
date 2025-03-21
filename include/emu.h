@@ -342,9 +342,10 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 	
 }
 #else /* Normal Emulator Implementation */
-
-
-
+__device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, storage_next_emuluator_context *pContext, uint32_t cq_db_head)
+{
+	return emu_tgt_map_Submit(pMgtTgtControl->pDevMapper, pContext);
+}
 #endif
 
 

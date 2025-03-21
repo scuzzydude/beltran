@@ -25,6 +25,11 @@ static inline const char *get_vendor_model_name(void)
 //** Device Functions  
 //*******************************************************************************************************
 
+__device__ inline int emu_model_vendor_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext)
+{
+
+	return 0;
+}
 
 
 
