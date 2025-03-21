@@ -8,12 +8,14 @@
 //** Host Functions  
 //*******************************************************************************************************
 
-static inline void emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapType, uint32_t modelType)
+static inline int emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapType, uint32_t modelType)
 {
+	int model_mem_size = 0;
+	int private_size = 0;
 	bam_emu_target_model *pModel;
 	bam_emu_mapper *pMap;
-
 	bam_target_emulator *pTgt;
+	fnModelPrivateInit fnMdlPrvInit = NULL;
 	
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_INIT_MAPPER);
 
@@ -47,14 +49,18 @@ static inline void emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapTyp
 	{
 		case EMU_MODEL_TYPE_LATENCY:
 			strcpy(pTgt->mapper.model.szModelName, "Latency Model");
+		//	private_size = emu_model_latency_private_size();
+			fnMdlPrvInit = emu_model_latency_private_init;
 			break;
 			
 		case EMU_MODEL_TYPE_AGGREGATION:
 			strcpy(pTgt->mapper.model.szModelName, "NVMe Aggregation Model");
+			fnMdlPrvInit = emu_model_aggregation_private_init;
 			break;
 
 		case EMU_MODEL_TYPE_VENDOR:
 			strcpy(pTgt->mapper.model.szModelName, get_vendor_model_name());
+			fnMdlPrvInit = emu_model_vendor_private_init;
 			break;
 		
 
@@ -71,16 +77,21 @@ static inline void emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapTyp
 
 	BAM_EMU_HOST_DBG_PRINT(verbose, "pDevMapper = %p size = %ld\n", mapType, sizeof(bam_emu_mapper));
 
+	model_mem_size += sizeof(bam_emu_mapper);
+
     cuda_err_chk(cudaMemcpy(pTgt->pTgt_control->pDevMapper, &pTgt->mapper, sizeof(bam_emu_mapper), cudaMemcpyHostToDevice));
 
-
+	if(fnMdlPrvInit)
+	{
+		model_mem_size += fnMdlPrvInit(pEmu, &pTgt->mapper.model);
+	}
 
 
 	BAM_EMU_HOST_DBG_PRINT(verbose, "Initialized Mapper with type = %d (%s)\n", mapType, pTgt->mapper.szMapName);
 	BAM_EMU_HOST_DBG_PRINT(verbose, "Initialized Model  with type = %d (%s)\n", modelType, pTgt->mapper.model.szModelName);
 	
 
-	
+	return model_mem_size;
 
 }
 

@@ -54,6 +54,8 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_DBG_CODE_PATH_H_EMU_THREAD    0x20
 #define BAM_DBG_CODE_PATH_H_CLEANUP_EMU   0x40
 #define BAM_DBG_CODE_PATH_H_INIT_MAPPER   0x80
+#define BAM_DBG_CODE_PATH_H_LAT_PSIZE     0x100
+
 
 
 #define BAM_DBG_CODE_DEVICE_OFFSET        32UL
@@ -65,6 +67,8 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_DBG_CODE_PATH_D_NVME_EXE      BAM_DBG_CODE_MACRO_DEVICE(0x10)
 #define BAM_DBG_CODE_PATH_D_NVME_LOOP     BAM_DBG_CODE_MACRO_DEVICE(0x20)
 #define BAM_DBG_CODE_PATH_D_CQ_DRAIN      BAM_DBG_CODE_MACRO_DEVICE(0x40)
+
+
 
 #define BAM_EMU_DEFAULT_CODE_PATH_VERBOSITY 0//BAM_DBG_CODE_PATH_ALL
 static uint64_t gCodePathVerbosity = BAM_EMU_DEFAULT_CODE_PATH_VERBOSITY;
@@ -140,12 +144,13 @@ typedef union
 
 } storage_next_command;
 
+#define STORAGE_NEXT_CONTEXT_LEVELS 7 
 typedef struct 
 {
 	storage_next_command *pCmd;
 	//Used by each level or mapped as an implementation structure
 	//or a pointer holder if mapped to device/emulator managed memory
-	uint64_t    storage_implementation_context[7];  
+	uint64_t    storage_implementation_context[STORAGE_NEXT_CONTEXT_LEVELS];  
 } storage_next_emuluator_context;
 
 #define EMU_CONTEXT storage_next_emuluator_context
@@ -164,6 +169,11 @@ typedef struct
 	uint32_t uModelType;
 	
 	char szModelName[EMU_COMPONENT_NAME_LEN];
+
+	BufferPtr d_model_private;
+
+	void *pvDevPrivate;
+	void *pvHostPrivate;
 
 	
 } bam_emu_target_model;
@@ -254,6 +264,7 @@ typedef struct
 
 
 	BufferPtr                       d_mapper;
+
 	bam_emu_mapper                 *pDevMapper;  //device copy
 
 		
@@ -330,7 +341,7 @@ typedef ulonglong4 emu_copy_type;
 #define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
 
 
-
+typedef uint32_t (*fnModelPrivateInit)(bam_host_emulator *pEmu, bam_emu_target_model *pModel);
 
 #endif
 

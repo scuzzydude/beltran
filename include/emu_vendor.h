@@ -18,6 +18,11 @@ static inline const char *get_vendor_model_name(void)
 	return "Generice Vendor Model (non-functional)";
 }
 
+uint32_t emu_model_vendor_private_init(bam_host_emulator *pEmu, bam_emu_target_model *pModel)
+{
+	return 0;
+}
+
 
 
 

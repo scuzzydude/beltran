@@ -912,6 +912,8 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
     DmaPtr                  aq_mem;
 	int qall_size = sizeof(bam_emulated_queue_pair) * BAM_EMU_MAX_QUEUES;
 	int mem_size = NVM_CTRL_MEM_MINSIZE;
+	int map_model_size = 0;
+	
 	if(posix_memalign((void **)&pFileMem, 4096, mem_size))
 	{
 		BAM_EMU_HOST_ASSERT(0);
@@ -1023,16 +1025,18 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 
 	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() pEmu->tgt.pDevQPairs = %p &tgt.queuePairs = %p, qall_size = %ld bam_emulated_target_control = %d \n", pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size, sizeof(bam_emulated_target_control));
 
+
+
+	map_model_size = emulator_init_mapper(pEmu, EMU_MAP_TYPE_DIRECT, EMU_MODEL_TYPE_LATENCY);
+
+
 #ifdef	BAM_EMU_USE_SHARED_Q_MEM
-	pEmu->shared_size = qall_size;// +  sizeof(bam_emulated_target_control) + 4096;
+	pEmu->shared_size = qall_size + map_model_size;// +  sizeof(bam_emulated_target_control) + 4096;
 #else
 	pEmu->shared_size = 0;
 #endif
 
-	emulator_init_mapper(pEmu, EMU_MAP_TYPE_DIRECT, EMU_MODEL_TYPE_LATENCY);
-
-
-	
+	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() Total Shared Size = %d map_model_size = %d\n", pEmu->shared_size, map_model_size);
 	cuda_err_chk(cudaMemcpy(pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size, cudaMemcpyHostToDevice));
 
 #ifdef	BAM_EMU_START_EMU_POST_Q_CONFIG
