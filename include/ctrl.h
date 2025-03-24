@@ -225,7 +225,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 
 #else
 	/* Workaround, for some reason,starting getting errors with this, not needed unless mapping doorbell to file */
-	printf("BAM_EMU_DOORBELL_TYPE = %d, skipping cudaHostRegister of MMAP file\b", BAM_EMU_DOORBELL_TYPE);
+	printf("BAM_EMU_DOORBELL_TYPE = %d, skipping cudaHostRegister of MMAP file\n", BAM_EMU_DOORBELL_TYPE);
 
 
 #endif

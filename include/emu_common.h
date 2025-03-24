@@ -126,13 +126,16 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 
 
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
-//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
-#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
+#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
+//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
 //TODO:  This is interesting.  I calcuated the amount of Q control memory with this option and pass it into the kernel
 //However, I never explicity reference this shared memory in the kernel.  However, my IOPs with basic loopback went from 40M to 144M with this simple change
 
-#define BAM_EMU_USE_SHARED_Q_MEM
+
+//TODO: This is a red herring, causing kernel NOT to run, rather than better performance ....
+
+//#define BAM_EMU_USE_SHARED_Q_MEM
 
 
 
@@ -250,6 +253,8 @@ typedef struct
 		char                    szName[32];
 		uint64_t                thread_count;
 
+		uint32_t                debugA[32];
+
 #if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_MANAGED) 
 		struct
 		{
@@ -338,7 +343,7 @@ typedef ulonglong4 emu_copy_type;
 
 
 /* Early Simple Loopback w/o simulated latency or transfer */
-//#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
+#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
 
 
 typedef uint32_t (*fnModelPrivateInit)(bam_host_emulator *pEmu, bam_emu_target_model *pModel);

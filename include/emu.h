@@ -479,7 +479,8 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
 #endif	
-	
+	pMgtTgtControl->debugA[0] = 0xBABA0001;
+
 //	BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "TGT: kernel_queueStream mapper = %s(%d)  model = %s(%d)\n" pMgtTgtControl-> 
 
 
@@ -487,8 +488,10 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 	{
 
 
+		pMgtTgtControl->debugA[1] = 0xBABA0002;
 		if(emu_tgt_SQ_Check(pMgtTgtControl, pQP))
 		{
+			pMgtTgtControl->debugA[2] = 0xBABA0003;
 			cq_db_head = emu_tgt_NVMe_Submit(pMgtTgtControl, pQP, &submit_count);
 
 			if(submit_count)
@@ -1029,7 +1032,7 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 
 
 
-	map_model_size = emulator_init_mapper(pEmu, EMU_MAP_TYPE_DIRECT, EMU_MODEL_TYPE_LATENCY);
+//	map_model_size = emulator_init_mapper(pEmu, EMU_MAP_TYPE_DIRECT, EMU_MODEL_TYPE_LATENCY);
 
 
 #ifdef	BAM_EMU_USE_SHARED_Q_MEM

@@ -149,7 +149,7 @@ void sequential_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t 
 
 __global__ //__launch_bounds__(64,32)
 void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_size, uint32_t n_reqs, unsigned long long* req_count, uint32_t num_ctrls, uint64_t* assignment, uint64_t reqs_per_thread, uint32_t access_type, uint8_t* access_type_assignment) {
-    //printf("in threads\n");
+//    printf("in threads\n");
     uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t laneid = lane_id();
 //    uint32_t bid = blockIdx.x;
@@ -157,6 +157,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 
     uint32_t ctrl;
     uint32_t queue;
+
     if (laneid == 0) 
 	{
 	    //ctrl = smid % (pc->n_ctrls);
@@ -171,7 +172,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
     queue =  __shfl_sync(0xFFFFFFFF, queue, 0);
 #ifdef BAM_EMU_COMPILE	
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
-	//	printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
+		printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
 
 		if(tid < ctrls[ctrl]->n_qps)
 		{
@@ -232,7 +233,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
         //read_data(pc, (ctrls[ctrl]->d_qps)+(queue),start_block, n_blocks, tid);
         //__syncthreads();
         //read_data(pc, (ctrls[ctrl].d_qps)+(queue),start_block*2, n_blocks, tid);
-        //printf("tid: %llu finished\n", (unsigned long long) tid);
+        printf("tid: %llu finished\n", (unsigned long long) tid);
 
     }
 
@@ -412,16 +413,32 @@ int main(int argc, char** argv) {
         }
         std::cout << "atlaunch kernel\n";
 #ifdef BAM_EMU_COMPILE 
+
+
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
 		ctrls[0]->pDevTgt_control->thread_count = n_threads;
-#endif
+
+        if (settings.random)
+        {
+			//std::cout << "calling random_access_kernel" << std::endl;
+			//printf("calling random_access_kernel <<< %d, %d, %d, %p>>>\n", g_size, b_size, ctrls[0]->pEmu->shared_size, ctrls[0]->pEmu->tgt.bamStream);
+			
+            random_access_kernel<<<g_size, b_size, ctrls[0]->pEmu->shared_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
+        }
+		else
+            sequential_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, settings.numReqs, settings.accessType, d_access_assignment);
+
+
+#else /* ! BAM_RUN_EMU_IN_BAM_KERNEL */
+
 		cuda_err_chk(cudaStreamCreateWithFlags (&ctrls[0]->pEmu->tgt.bamStream, (cudaStreamDefault)));
 
 
         if (settings.random)
         {
-			std::cout << "calling random_access_kernel" << std::endl;
- 
+			//std::cout << "calling random_access_kernel" << std::endl;
+			printf("calling random_access_kernel <<< %d, %d, %d, %p>>>\n", g_size, b_size, ctrls[0]->pEmu->shared_size, ctrls[0]->pEmu->tgt.bamStream);
+			
             random_access_kernel<<<g_size, b_size, ctrls[0]->pEmu->shared_size, ctrls[0]->pEmu->tgt.bamStream>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
         }
 		else
@@ -429,10 +446,20 @@ int main(int argc, char** argv) {
 
 		printf("call bam kernel done\n");
 
-#ifndef  BAM_RUN_EMU_IN_BAM_KERNEL
+		
 		start_emulation_target(ctrls[0]->pEmu);
+
+		cuda_err_chk(cudaStreamSynchronize(ctrls[0]->pEmu->tgt.bamStream));
+
+
 #endif
-		cudaStreamSynchronize(ctrls[0]->pEmu->tgt.bamStream);
+
+		for(int i = 0; i < 32; i++)
+		{
+			printf("BADEBUG[%d] = 0x%08x\n", i, ctrls[0]->pEmu->tgt.pTgt_control->debugA[i]);
+		}
+
+
 #else /* ! BAM_EMU_COMPILE  */
 
         if (settings.random)
@@ -443,7 +470,6 @@ int main(int argc, char** argv) {
 		else
             sequential_access_kernel<<<g_size, b_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, settings.numReqs, settings.accessType, d_access_assignment);
 
-
 #endif /* END #ifdef BAM_EMU_COMPILE */
         Event after;
 
@@ -453,9 +479,6 @@ int main(int argc, char** argv) {
 		ctrls[0]->pEmu->bRun = 0;
 #endif
 #endif
-
-
-
 
         //print_cache_kernel<<<1,1>>>(d_pc);
         //new_kernel<<<1,1>>>();
