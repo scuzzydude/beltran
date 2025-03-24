@@ -208,7 +208,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 
 
 #ifdef BAM_EMU_COMPILE	
-#if BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_MAPPED_FILE
+#if (BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_MAPPED_FILE)
 
 
 

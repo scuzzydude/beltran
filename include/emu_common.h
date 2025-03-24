@@ -26,6 +26,16 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 
 #define BAM_RUN_EMU_IN_BAM_KERNEL
 
+#define	KERNEL_DBG_ARRAY
+
+
+#ifdef KERNEL_DBG_ARRAY
+#define BA_DBG_SET(__p, __idx, __val)
+#else
+#define BA_DBG_SET(__p, __idx, __val)
+#endif
+
+
 
 
 #define BAM_EMU_TARGET_DISABLE    0
@@ -126,8 +136,8 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 
 
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
-#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
-//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
+//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
+#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
 //TODO:  This is interesting.  I calcuated the amount of Q control memory with this option and pass it into the kernel
 //However, I never explicity reference this shared memory in the kernel.  However, my IOPs with basic loopback went from 40M to 144M with this simple change

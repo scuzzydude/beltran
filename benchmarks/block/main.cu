@@ -413,7 +413,8 @@ int main(int argc, char** argv) {
         }
         std::cout << "atlaunch kernel\n";
 #ifdef BAM_EMU_COMPILE 
-
+		printf("PRE_KERNEL_ERR = %d\n", cudaPeekAtLastError());
+		
 
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
 		ctrls[0]->pDevTgt_control->thread_count = n_threads;
@@ -454,10 +455,6 @@ int main(int argc, char** argv) {
 
 #endif
 
-		for(int i = 0; i < 32; i++)
-		{
-			printf("BADEBUG[%d] = 0x%08x\n", i, ctrls[0]->pEmu->tgt.pTgt_control->debugA[i]);
-		}
 
 
 #else /* ! BAM_EMU_COMPILE  */
@@ -486,6 +483,15 @@ int main(int argc, char** argv) {
 
         //cuda_err_chk(cudaMemcpy(ret_array, h_pc.base_addr,page_size*n_pages, cudaMemcpyDeviceToHost));
         cuda_err_chk(cudaDeviceSynchronize());
+
+#ifdef KERNEL_DBG_ARRAY
+		for(int i = 0; i < 32; i++)
+		{
+			printf("DEBUG[%d] = 0x%08x\n", i, ctrls[0]->pEmu->tgt.pTgt_control->debugA[i]);
+		}
+#endif
+
+
         if (input_f != nullptr) {
             cuda_err_chk(cudaMemcpy(map_in, h_pc.pdt.base_addr,  std::min((uint64_t)sb_in.st_size, total_cache_size), cudaMemcpyDeviceToHost));
             munmap(map_in, sb_in.st_size);
