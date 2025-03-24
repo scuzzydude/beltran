@@ -202,10 +202,16 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 	
 	initializeController(*this, ns_id);
 
+//	mmFlag = cudaHostRegisterIoMemory;
+
 	printf("CALL cudaHOstRegister = %p, %d, %d mm_size = %d\n", ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag, ctrl->mm_size );
 
 
-	
+#ifdef BAM_EMU_COMPILE	
+#if BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_MAPPED_FILE
+
+
+
 //	cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag);
 	cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, ctrl->mm_size, mmFlag);
 
@@ -216,6 +222,32 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 	{
 		throw error(string("Unexpected error while mapping IO memory (cudaHostRegister): ") + cudaGetErrorString(err));
 	}
+
+#else
+	/* Workaround, for some reason,starting getting errors with this, not needed unless mapping doorbell to file */
+	printf("BAM_EMU_DOORBELL_TYPE = %d, skipping cudaHostRegister of MMAP file\b", BAM_EMU_DOORBELL_TYPE);
+
+
+#endif
+
+
+
+#else
+	//	cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, NVM_CTRL_MEM_MINSIZE, mmFlag);
+		cudaError_t err = cudaHostRegister((void*) ctrl->mm_ptr, ctrl->mm_size, mmFlag);
+	
+		printf("cudaHostRegister err = %d\n", err);
+	
+	
+		if (err != cudaSuccess)
+		{
+			throw error(string("Unexpected error while mapping IO memory (cudaHostRegister): ") + cudaGetErrorString(err));
+		}
+
+
+#endif
+
+
 
 #ifdef BAM_EMU_COMPILE	
 #ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL

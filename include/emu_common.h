@@ -24,7 +24,7 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 //controls emulation compile and benchmark enablement
 #define BAM_EMU_COMPILE 
 
-//#define BAM_RUN_EMU_IN_BAM_KERNEL
+#define BAM_RUN_EMU_IN_BAM_KERNEL
 
 
 
@@ -126,8 +126,8 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 
 
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
-#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
-//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
+//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
+#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
 //TODO:  This is interesting.  I calcuated the amount of Q control memory with this option and pass it into the kernel
 //However, I never explicity reference this shared memory in the kernel.  However, my IOPs with basic loopback went from 40M to 144M with this simple change
@@ -325,7 +325,7 @@ typedef struct
 
 
 
-//#define BAM_EMU_TARGET_HOST_THREAD
+#define BAM_EMU_TARGET_HOST_THREAD
 
 
 
@@ -338,7 +338,7 @@ typedef ulonglong4 emu_copy_type;
 
 
 /* Early Simple Loopback w/o simulated latency or transfer */
-#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
+//#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
 
 
 typedef uint32_t (*fnModelPrivateInit)(bam_host_emulator *pEmu, bam_emu_target_model *pModel);

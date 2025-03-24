@@ -936,7 +936,9 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 
 	close(fd);
 
-	fd = open(temppath, O_RDWR);
+	//fd = open(temppath, O_RDWR);
+	fd = open(temppath, O_RDWR, S_IRWXU);
+	
 
 	BAM_EMU_HOST_DBG_PRINT(verbose,"initializeEmulator(FD2) tempath = %s fd = %d \n", temppath, fd);
 

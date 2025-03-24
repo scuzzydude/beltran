@@ -120,7 +120,7 @@ uint32_t emu_model_latency_private_init(bam_host_emulator *pEmu, bam_emu_target_
 		/* These are device pointers, host should never touch */
 		pLatModel->latency_chain[i].pChannels = pChan;
 	
-		BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_latency_private_init() pChannels = %p channels = %d\n", pChan, pWorkingModel->latency_chain[i].channels);
+		BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_latency_private_init() pChannels = %p channels = %d max_chains = %d\n", pChan, pWorkingModel->latency_chain[i].channels);
 
 		pChan += pWorkingModel->latency_chain[i].channels;
 
@@ -142,9 +142,27 @@ uint32_t emu_model_latency_private_init(bam_host_emulator *pEmu, bam_emu_target_
 //*******************************************************************************************************
 //** Device Functions  
 //*******************************************************************************************************
+__device__ inline int emu_model_private_data_check(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext)
+{
+	emu_latency_model *pLatModel = (emu_latency_model *)pModel->pvDevPrivate;
+	int i;
+
+	BAM_EMU_DEV_DBG_PRINT4(BAM_EMU_DBGLVL_INFO, "private_data_check(%p) nLoobackLevel=%d chain_count=%d max_chains=%d \n", pLatModel, pLatModel->nLoobackLevel, pLatModel->chain_count, EMU_LATENCY_MAX_CHAINS);
+
+	for(i = 0; i <  pLatModel->chain_count; i++)
+	{
+
+
+	}
+	
+
+	return 0;
+}
 
 __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext)
 {
+	//temp
+	emu_model_private_data_check(pModel, pContext);
 
 	return 0;
 }
