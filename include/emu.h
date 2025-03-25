@@ -487,7 +487,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
 #endif	
-	 BA_DBG_SET(pMgtTgtControl, 0, 0xBABA0001);
+	BA_DBG_SET(pMgtTgtControl, 1, 0xBABA0001);
 	
 //	BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "TGT: kernel_queueStream mapper = %s(%d)  model = %s(%d)\n" pMgtTgtControl-> 
 
@@ -496,10 +496,10 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 	{
 
 
-	 	BA_DBG_SET(pMgtTgtControl, 0, 0xBABA0002);
+	 	BA_DBG_SET(pMgtTgtControl, 2, 0xBABA0002);
 		if(emu_tgt_SQ_Check(pMgtTgtControl, pQP))
 		{
-			BA_DBG_SET(pMgtTgtControl, 0, 0xBABA0003);
+			BA_DBG_SET(pMgtTgtControl, 3, 0xBABA0003);
 			cq_db_head = emu_tgt_NVMe_Submit(pMgtTgtControl, pQP, &submit_count);
 
 			if(submit_count)
@@ -517,6 +517,13 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 		count++;
 
 	}	
+
+
+	if(count)
+	{
+		BA_DBG_SET(pMgtTgtControl, BA_DBG_IDX_MARK_RUN, 0xBABABABA);
+	}
+	BA_DBG_SET(pMgtTgtControl, BA_DBG_IDX_RUN_COUNT, count);
 
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream oneshot = %d count = %d x = %d EXIT\n",0, count, 0);	
 }
@@ -820,9 +827,34 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_CLEANUP_EMU);
 	int i;
 	
+
+#ifdef KERNEL_DBG_ARRAY
+	for(int i = 0; i < 32; i++)
+	{
+		printf("DEBUG[%d] = 0x%08x\n", i, pEmu->tgt.pTgt_control->debugA[i]);
+	}
+
+	if(pEmu->tgt.pTgt_control->debugA[BA_DBG_IDX_MARK_RUN] != BA_DBG_VAL_MARK_RUN)
+	{
+
+		printf("*************************************************************************************************\n");
+		printf("*************************************************************************************************\n");
+		printf("!!!! EMULATOR THREAD TID=0 DID NOT RUN CYCLES!!!!\n");
+		printf("*************************************************************************************************\n");
+		printf("*************************************************************************************************\n");
+
+	}
+	else
+	{
+		printf("EMULATOR THREAD TID=0 Ran %d Cycles\n", pEmu->tgt.pTgt_control->debugA[BA_DBG_IDX_RUN_COUNT]);
+	}
+#endif
+
+
 	
 	BAM_EMU_HOST_DBG_PRINT(verbose,"cleanup_emulator_target(%p) CALL %d queues configured\n", pEmu, pEmu->tgt.pTgt_control->numQueues);
 
+	pEmu->bRun = 0;
 	pEmu->tgt.pTgt_control->bRun = 0;
 
 	for(i = 0; i < BAM_EMU_MAX_QUEUES; i++)
@@ -830,7 +862,7 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 		if(pEmu->tgt.queuePairs[i].qp_enabled)
 		{
 			BAM_EMU_HOST_DBG_PRINT(verbose,"cleanup_emulator_target() qp = %d ENABLED\n", i); 
-			emulator_update_d_queue(pEmu, i, 0);
+			//emulator_update_d_queue(pEmu, i, 0);
 			
 		}
 		else
@@ -840,10 +872,8 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 		}
 	}
 
-	sleep(1);
-
-	pEmu->bRun = 0;
-
+	
+	
 
 	//TODO: Cleanup 		
 #if 0

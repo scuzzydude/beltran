@@ -484,12 +484,6 @@ int main(int argc, char** argv) {
         //cuda_err_chk(cudaMemcpy(ret_array, h_pc.base_addr,page_size*n_pages, cudaMemcpyDeviceToHost));
         cuda_err_chk(cudaDeviceSynchronize());
 
-#ifdef KERNEL_DBG_ARRAY
-		for(int i = 0; i < 32; i++)
-		{
-			printf("DEBUG[%d] = 0x%08x\n", i, ctrls[0]->pEmu->tgt.pTgt_control->debugA[i]);
-		}
-#endif
 
 
         if (input_f != nullptr) {

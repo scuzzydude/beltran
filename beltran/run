@@ -16,7 +16,8 @@ declare -x LD_BIND_NOW=1
 #gdb --args ./astros --ioengine=bam
 rm -f working_device_mem.bin
 cp ../build/bin/nvm-block-bench .
-./nvm-block-bench --threads=12 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=4096 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+./nvm-block-bench --threads=128 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=4096 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
+#./nvm-block-bench --threads=12 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=4096 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
 #./nvm-block-bench --threads=12 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
 #./nvm-block-bench --threads=8 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true
 #./nvm-block-bench --threads=128 --blk_size=4 --reqs=1 --pages=262144 --queue_depth=4  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true

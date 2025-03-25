@@ -324,6 +324,10 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 
 inline Controller::~Controller()
 {
+#ifdef BAM_EMU_COMPILE	
+	cleanup_emulator_target(pEmu);
+#endif
+
     cudaFree(d_qps);
     for (size_t i = 0; i < n_qps; i++) {
         delete h_qps[i];

@@ -30,10 +30,15 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 
 
 #ifdef KERNEL_DBG_ARRAY
-#define BA_DBG_SET(__p, __idx, __val)
+#define BA_DBG_SET(__p, __idx, __val) if(0 == (blockIdx.x * blockDim.x + threadIdx.x))  __p->debugA[__idx] = __val 
 #else
 #define BA_DBG_SET(__p, __idx, __val)
 #endif
+
+#define BA_DBG_IDX_MARK_RUN  0
+#define BA_DBG_IDX_RUN_COUNT 1
+
+#define BA_DBG_VAL_MARK_RUN  0xBABABABA
 
 
 
