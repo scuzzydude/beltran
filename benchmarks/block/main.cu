@@ -172,7 +172,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
     queue =  __shfl_sync(0xFFFFFFFF, queue, 0);
 #ifdef BAM_EMU_COMPILE	
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
-		printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
+//		printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
 
 		if(tid < ctrls[ctrl]->n_qps)
 		{
@@ -233,7 +233,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
         //read_data(pc, (ctrls[ctrl]->d_qps)+(queue),start_block, n_blocks, tid);
         //__syncthreads();
         //read_data(pc, (ctrls[ctrl].d_qps)+(queue),start_block*2, n_blocks, tid);
-        printf("tid: %llu finished\n", (unsigned long long) tid);
+        //printf("tid: %llu finished\n", (unsigned long long) tid);
 
     }
 
@@ -269,7 +269,9 @@ int main(int argc, char** argv) {
     }
 
 #ifdef BAM_EMU_COMPILE        
-	cudaDeviceReset();
+	printf("calling cudaDeviceReset()\n");
+	 cuda_err_chk(cudaDeviceReset());
+	printf("return cudaDeviceReset()\n");
 #endif
 
     cudaDeviceProp properties;
@@ -399,6 +401,7 @@ int main(int argc, char** argv) {
             cuda_err_chk(cudaMalloc(&d_assignment, n_threads*sizeof(uint64_t)));
             cuda_err_chk(cudaMemcpy(d_assignment, assignment,  n_threads*sizeof(uint64_t), cudaMemcpyHostToDevice));
         }
+        std::cout << "atlaunch kernel\n";
         Event before;
 
         uint8_t* access_assignment;
@@ -411,9 +414,8 @@ int main(int argc, char** argv) {
             cuda_err_chk(cudaMalloc(&d_access_assignment, n_threads*sizeof(uint8_t)));
             cuda_err_chk(cudaMemcpy(d_access_assignment, access_assignment, n_threads*sizeof(uint8_t), cudaMemcpyHostToDevice));
         }
-        std::cout << "atlaunch kernel\n";
 #ifdef BAM_EMU_COMPILE 
-		printf("PRE_KERNEL_ERR = %d\n", cudaPeekAtLastError());
+		//printf("PRE_KERNEL_ERR = %d\n", cudaPeekAtLastError());
 		
 
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
@@ -499,7 +501,7 @@ int main(int argc, char** argv) {
         std::cout << std::dec << "Elapsed Time: " << elapsed << " us\tNumber of Ops: "<< ios << "\tData Size (bytes): " << data << std::endl;
         std::cout << std::dec << "Ops/sec: " << iops << "\tEffective Bandwidth(GB/S): " << bandwidth << std::endl;
 
-		printf("IOPs = %f\n", iops);
+		printf("IOPs = %f, MIOPS = %f\n", iops, iops / 1000000.0);
 
 		h_pc.print_reset_stats();
         //std::cout << std::dec << ctrls[0]->ns.lba_data_size << std::endl;

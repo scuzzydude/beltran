@@ -262,29 +262,45 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     reserveQueues(MAX_QUEUES,MAX_QUEUES);
     n_qps = std::min(n_sqs, n_cqs);
     n_qps = std::min(n_qps, (uint16_t)numQueues);
-    printf("SQs: %d\tCQs: %d\tn_qps: %d queueDepth = %ld\n", n_sqs, n_cqs, n_qps, queueDepth);
-    h_qps = (QueuePair**) malloc(sizeof(QueuePair)*n_qps);
+		
+	size_t h_qp_size = sizeof(QueuePair) * n_qps;
+	
+    printf("SQs: %d\tCQs: %d\tn_qps: %d queueDepth = %ld\n", n_sqs, n_cqs, n_qps, queueDepth );
+    h_qps = (QueuePair**) malloc(h_qp_size);
+
+	printf("h_qps = %p h_qp_size = %ld\n", h_qps, h_qp_size);
+	
+	
     cuda_err_chk(cudaMalloc((void**)&d_qps, sizeof(QueuePair)*n_qps));
     for (size_t i = 0; i < n_qps; i++) 
 	{
- //       printf("started creating qp\n");
+  //      printf("started creating qp %ld\n", i);
         h_qps[i] = new QueuePair(ctrl, cudaDevice, ns, info, aq_ref, i+1, queueDepth, pEmu);
- //       printf("finished creating qp\n");
+  //      printf("finished creating qp %ld\n", i);
         cuda_err_chk(cudaMemcpy(d_qps+i, h_qps[i], sizeof(QueuePair), cudaMemcpyHostToDevice));
- //       printf("finished copy QP Memory to device\n");
+//        printf("finished copy QP Memory to device %ld\n", i);
 
 #ifdef BAM_EMU_COMPILE
+
+	//	printf("set_doorbell QP(%i) queuePair = %p h_qps = %p\n", i, &pEmu->tgt.queuePairs[i], &h_qps[i]);
+
 		pEmu->tgt.queuePairs[i].cQ.db = h_qps[i]->cq.db;
 		pEmu->tgt.queuePairs[i].sQ.db = h_qps[i]->sq.db;
 
+		printf("init_doorbell QP(%i) queuePair = %p h_qps = %p cq.db = %p sq_db = %p\n", i, &pEmu->tgt.queuePairs[i], &h_qps[i], h_qps[i]->cq.db, h_qps[i]->sq.db);
+
 		*h_qps[i]->cq.db = 0;
 		*h_qps[i]->sq.db = 0;
+
+		//h_qps = 0x564e04ffb010 h_qp_size = 438272
+			
 		
-		//printf("(%d) cq.db = %p sq.sb = %p\n", i, pEmu->tgt.queuePairs[i].cQ.db, pEmu->tgt.queuePairs[i].sQ.db);
+		printf("(%d) cq.db = %p sq.sb = %p\n", i, pEmu->tgt.queuePairs[i].cQ.db, pEmu->tgt.queuePairs[i].sQ.db);
 
 		//hack, have to reupdate the queues becuse of the device pointers for the doorbell
 		
 		emulator_update_d_queue(pEmu,  i + 1, 1);
+    //    printf("emulator_update_d_queue() %ld\n", i);
 
 #endif
 

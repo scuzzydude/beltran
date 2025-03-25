@@ -1,0 +1,7 @@
+cp ../build/bin/nvm-block-bench .
+
+
+#cuda-gdb --args ./nvm-block-bench --threads=524288 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=256 --random=true
+cuda-memcheck ./nvm-block-bench --threads=524288 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1024 --random=true
+#cuda-gdb --args ./nvm-block-bench --threads=524288 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=511 --random=true
+#./nvm-block-bench --threads=524288 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=5 --random=true
