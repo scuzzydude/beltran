@@ -76,7 +76,7 @@ struct Controller
     Controller(uint64_t controllerId, uint32_t nvmNamespace, uint32_t adapter, uint32_t segmentId);
 #endif
 
-    Controller(const char* path, uint32_t nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget = BAM_EMU_TARGET_DISABLE);
+    Controller(const char* path, uint32_t nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget = BAM_EMU_TARGET_DISABLE, uint32_t blkSize = 0);
 
     void reserveQueues();
 
@@ -157,7 +157,7 @@ Controller::Controller(uint64_t ctrl_id, uint32_t ns_id, uint32_t)
 
 
 
-inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget)
+inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget, uint32_t blkSize)
     : ctrl(nullptr)
     , aq_ref(nullptr)
     , deviceId(cudaDevice)
@@ -168,7 +168,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 	if(emulationTarget & BAM_EMU_TARGET_ENABLE)
 	{
 		emulationTargetFlags = emulationTarget;
-		ctrl = initializeEmulator(ns_id, cudaDevice, queueDepth, numQueues, &pEmu, emulationTarget);
+		ctrl = initializeEmulator(ns_id, cudaDevice, queueDepth, numQueues, &pEmu, emulationTarget, blkSize);
 
 		printf("Controller Init :BAM_EMU_TARGET_ENABLE pEmu = %p ctrl = %p numQueues = %ld\n", pEmu, ctrl, numQueues);
 

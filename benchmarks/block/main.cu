@@ -281,7 +281,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    printf("Prop: deviceOverlap = %d\n", properties.deviceOverlap);
+    printf("Prop: deviceOverlap              = %d\n", properties.deviceOverlap);
+    printf("Prop: sharedMemPerBlock          = %d\n", properties.sharedMemPerBlock );
+    printf("Prop: sharedMemPerMultiprocessor = %d\n", properties.sharedMemPerMultiprocessor );
 
     try {
 
@@ -317,7 +319,7 @@ int main(int argc, char** argv) {
         for (size_t i = 0 ; i < settings.n_ctrls; i++)
 	{
 #ifdef BAM_EMU_COMPILE            
-            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  BAM_EMU_TARGET_ENABLE);
+            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  BAM_EMU_TARGET_ENABLE, settings.blkSize);
 #else
             ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues);
 #endif

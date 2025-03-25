@@ -473,27 +473,41 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 	
 }
 
+
+__device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_queue_pair         *pDevQPairs, bam_emulated_queue_pair *pQProxy)
+{
+	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+#ifdef BAM_EMU_USE_SHARED_Q_CTRL
+	emu_tgt_DMA((void *)pQProxy,(void *)&pDevQPairs[tid],sizeof(bam_emulated_queue_pair),0);
+	return pQProxy;
+#else
+	return &pDevQPairs[tid];
+#endif
+}
+
 #ifdef BAM_RUN_EMU_IN_BAM_KERNEL
 #define EMU_KERNEL_ENTRY_TYPE __device__
 #else 
 #define EMU_KERNEL_ENTRY_TYPE __global__
 #endif
 
-
-
 EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pDevQPairs)
 
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_KER_QSTRM);
 	uint32_t count = 0;
-#ifndef RESIDENT_STREAM_DEBUG
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	uint32_t submit_count = 0;
-	bam_emulated_queue_pair 	   *pQP = &pDevQPairs[tid];
+#ifdef BAM_EMU_USE_SHARED_Q_CTRL
+	__shared__ bam_emulated_queue_pair sharedQP;
+	bam_emulated_queue_pair 	   *pQP = emu_tgt_get_QueuePair(pDevQPairs, &sharedQP);
+#else
+	bam_emulated_queue_pair 	   *pQP = emu_tgt_get_QueuePair(pDevQPairs, NULL);
+#endif
 	uint32_t cq_db_head;
 
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
-#endif	
+
 	BA_DBG_SET(pMgtTgtControl, 1, 0xBABA0001);
 	
 //	BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "TGT: kernel_queueStream mapper = %s(%d)  model = %s(%d)\n" pMgtTgtControl-> 
@@ -962,7 +976,7 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 
 
 
-static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, bam_host_emulator **pEmulator, uint64_t emulationTargetFlags)
+static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, bam_host_emulator **pEmulator, uint64_t emulationTargetFlags, uint32_t blkSize)
 {
 
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_INIT_EMU);
@@ -1042,7 +1056,7 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 
 #define EMU_GRID_SIZE_DEFAULT 32
 
-	if(numQueues <= EMU_GRID_SIZE_DEFAULT)
+	if(numQueues <= blkSize)
 	{
 		pEmu->g_size = 1;
 		pEmu->b_size = numQueues;
@@ -1050,8 +1064,8 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	}
 	else
 	{
-		pEmu->g_size = ((numQueues - 1) / EMU_GRID_SIZE_DEFAULT) + 1;
-		pEmu->b_size = EMU_GRID_SIZE_DEFAULT;
+		pEmu->g_size = ((numQueues - 1) / blkSize) + 1;
+		pEmu->b_size = blkSize;
 		
 	}
 	printf("numQueues = %ld g_size = %d b_size = %d EMU_GRID_SIZE_DEFAULT=%d\n", numQueues, pEmu->g_size, pEmu->b_size, (uint32_t)EMU_GRID_SIZE_DEFAULT); 
@@ -1099,13 +1113,9 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 #endif
 
 
-#ifdef	BAM_EMU_USE_SHARED_Q_MEM
-	pEmu->shared_size = qall_size + map_model_size;// +  sizeof(bam_emulated_target_control) + 4096;
-#else
 	pEmu->shared_size = 0;
-#endif
 
-	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() Total Shared Size = %d map_model_size = %d\n", pEmu->shared_size, map_model_size);
+	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() Total Shared Size = %d map_model_size = %d \n", pEmu->shared_size, map_model_size);
 	cuda_err_chk(cudaMemcpy(pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size, cudaMemcpyHostToDevice));
 
 #ifdef	BAM_EMU_START_EMU_POST_Q_CONFIG
