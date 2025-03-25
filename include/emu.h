@@ -974,7 +974,7 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	int fd;
     DmaPtr                  aq_mem;
 	int qall_size = sizeof(bam_emulated_queue_pair) * BAM_EMU_MAX_QUEUES;
-	int mem_size = NVM_CTRL_MEM_MINSIZE;
+	int mem_size = NVM_CTRL_MEM_MINSIZE * 2;
 	int map_model_size = 0;
 	
 	if(posix_memalign((void **)&pFileMem, 4096, mem_size))
