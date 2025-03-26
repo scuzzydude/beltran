@@ -145,6 +145,7 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
 //#define BAM_EMU_USE_SHARED_Q_CTRL
+#define BAM_EMU_USE_KCONTEXT_Q_CTRL
 
 
 

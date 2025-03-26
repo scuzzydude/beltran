@@ -191,7 +191,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 #endif
 
 			
-			kernel_queueStream(ctrls[ctrl]->pDevTgt_control, ctrls[ctrl]->pDevQueuePairs);
+			kernel_Emulator(ctrls[ctrl]->pDevTgt_control, ctrls[ctrl]->pDevQueuePairs);
 			return;
 		}
 		else

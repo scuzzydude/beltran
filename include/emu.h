@@ -477,12 +477,16 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 __device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_queue_pair         *pDevQPairs, bam_emulated_queue_pair *pQProxy)
 {
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-#ifdef BAM_EMU_USE_SHARED_Q_CTRL
-	emu_tgt_DMA((void *)pQProxy,(void *)&pDevQPairs[tid],sizeof(bam_emulated_queue_pair),0);
-	return pQProxy;
-#else
-	return &pDevQPairs[tid];
-#endif
+
+	if(NULL != pQProxy)
+	{
+		emu_tgt_DMA((void *)pQProxy,(void *)&pDevQPairs[tid],sizeof(bam_emulated_queue_pair),0);
+		return pQProxy;
+	}
+	else
+	{
+		return &pDevQPairs[tid];
+	}
 }
 
 #ifdef BAM_RUN_EMU_IN_BAM_KERNEL
@@ -491,26 +495,35 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_q
 #define EMU_KERNEL_ENTRY_TYPE __global__
 #endif
 
-EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pDevQPairs)
+EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pDevQPairs)
 
 {
+	bam_emulated_queue_pair 	   *pQP;
+	uint32_t cq_db_head;
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_KER_QSTRM);
 	uint32_t count = 0;
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	uint32_t submit_count = 0;
+	bam_emulated_queue_pair *pShQp;
+#if defined(BAM_EMU_USE_SHARED_Q_CTRL) || defined(BAM_EMU_USE_KCONTEXT_Q_CTRL)
+#ifdef BAM_EMU_USE_KCONTEXT_Q_CTRL
+	bam_emulated_queue_pair sharedQP;
+#endif
 #ifdef BAM_EMU_USE_SHARED_Q_CTRL
 	__shared__ bam_emulated_queue_pair sharedQP;
-	bam_emulated_queue_pair 	   *pQP = emu_tgt_get_QueuePair(pDevQPairs, &sharedQP);
-#else
-	bam_emulated_queue_pair 	   *pQP = emu_tgt_get_QueuePair(pDevQPairs, NULL);
 #endif
-	uint32_t cq_db_head;
+	pShQp = &sharedQP;
+#else
+	pShQp = NULL;
+#endif
 
-	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
+	pQP = emu_tgt_get_QueuePair(pDevQPairs, pShQp);
+
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_Emulator ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
 
 	BA_DBG_SET(pMgtTgtControl, 1, 0xBABA0001);
 	
-//	BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "TGT: kernel_queueStream mapper = %s(%d)  model = %s(%d)\n" pMgtTgtControl-> 
+//	BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "TGT: kernel_Emulator mapper = %s(%d)  model = %s(%d)\n" pMgtTgtControl-> 
 
 
 	while(pMgtTgtControl->bRun)
@@ -546,7 +559,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_queueStream(bam_emulated_target_control    *pM
 	}
 	BA_DBG_SET(pMgtTgtControl, BA_DBG_IDX_RUN_COUNT, count);
 
-	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_queueStream oneshot = %d count = %d x = %d EXIT\n",0, count, 0);	
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_Emulator oneshot = %d count = %d x = %d EXIT\n",0, count, 0);	
 }
 
 
@@ -767,14 +780,14 @@ void * launch_emu_target(void *pvEmu)
 #else
 
 #ifdef RESIDENT_STREAM_DEBUG
-	kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (5);
+	kernel_Emulator<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (5);
 #else
-	kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
+	kernel_Emulator<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
 #endif
 
 
-	//kernel_queueStream<<<pEmu->g_size, pEmu->b_size>>> (pEmu->tgt.pMgtTgtControl, pEmu->tgt.pDevQPairs);
-	BAM_EMU_HOST_DBG_PRINT(verbose, "kernel_queueStream RETURN(%d)\n", 0);
+	//kernel_Emulator<<<pEmu->g_size, pEmu->b_size>>> (pEmu->tgt.pMgtTgtControl, pEmu->tgt.pDevQPairs);
+	BAM_EMU_HOST_DBG_PRINT(verbose, "kernel_Emulator RETURN(%d)\n", 0);
 
 #endif
 
@@ -787,7 +800,7 @@ void * launch_emu_target(void *pvEmu)
 
 		}	
 #ifdef BAM_EMU_QTHREAD_ONE_SHOT
-		kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
+		kernel_Emulator<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
 
 		cudaStreamSynchronize(pEmu->tgt.queueStream);
 #else	
@@ -829,9 +842,9 @@ static void start_emulation_target(bam_host_emulator *pEmu)
 	{
 		cuda_err_chk(cudaStreamCreate (&pEmu->tgt.queueStream));
 
-		kernel_queueStream<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
+		kernel_Emulator<<< pEmu->g_size, pEmu->b_size, 0, pEmu->tgt.queueStream >>> (pEmu->tgt.pTgt_control, pEmu->tgt.pDevQPairs);
 
-		BAM_EMU_HOST_DBG_PRINT(verbose,"HOST: kernel_queueStream RETURN(%d)\n",0);
+		BAM_EMU_HOST_DBG_PRINT(verbose,"HOST: kernel_Emulator RETURN(%d)\n",0);
 
 	}
 	catch (const error& e) 
