@@ -482,25 +482,27 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_init_QueuePair(bam_emulated_
 	
 	*pQueues_per_thread = 1;
 
+	if(pMgtTgtControl->numEmuThreads)
+	{
+		*pQueues_per_thread = pMgtTgtControl->numQueues / (uint32_t)pMgtTgtControl->numEmuThreads;
+	
+	}
+
+	base_q_idx = tid * (*pQueues_per_thread);
+	
+	*pBase_q_idx = base_q_idx;
+	
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT:(%ld) numQueues = %d numEmuThreads = %ld Queues_per_thread =%d\n", tid, pMgtTgtControl->numQueues, pMgtTgtControl->numEmuThreads, *pQueues_per_thread);
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT:(%ld) base_q_idx = %d\n", tid, base_q_idx);
+
 	if(NULL != pQProxy)
 	{
-		emu_tgt_DMA((void *)pQProxy,(void *)&pDevQPairs[tid],sizeof(bam_emulated_queue_pair),0);
+		emu_tgt_DMA((void *)pQProxy,(void *)&pDevQPairs[base_q_idx],sizeof(bam_emulated_queue_pair) * (*pQueues_per_thread),0);
 		return pQProxy;
 	}
 	else
 	{
-		if(pMgtTgtControl->numEmuThreads)
-		{
-			*pQueues_per_thread = pMgtTgtControl->numQueues / (uint32_t)pMgtTgtControl->numEmuThreads;
 
-		}
-
-		base_q_idx = tid * (*pQueues_per_thread);
-
-		*pBase_q_idx = base_q_idx;
-		
-		BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT:(%ld) numQueues = %d numEmuThreads = %ld Queues_per_thread =%d\n", tid, pMgtTgtControl->numQueues, pMgtTgtControl->numEmuThreads, *pQueues_per_thread);
-		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT:(%ld) base_q_idx = %d\n", tid, base_q_idx);
 		
 		return &pDevQPairs[base_q_idx];
 	}
@@ -511,7 +513,7 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_q
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_GET_Q_PAIR);
-	uint32_t q_idx = (count % queues_per_thread) + base_q_idx;
+	uint32_t q_idx = (count % queues_per_thread); 
 
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT:(%ld) count =%d q_idx = %d\n", tid, count, q_idx);
 	
@@ -521,6 +523,8 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_q
 	}
 	else
 	{
+		q_idx + base_q_idx;
+		
 		return &pDevQPairs[q_idx];
 	}
 	
@@ -546,8 +550,8 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	uint32_t queues_per_thread;
 	uint32_t base_q_idx;
 #ifdef BAM_EMU_USE_KCONTEXT_Q_CTRL
-	bam_emulated_queue_pair sharedQP;
-	pRegQp = &sharedQP;
+	bam_emulated_queue_pair sharedQP[BAM_EMU_USE_KCONTEXT_Q_CTRL];
+	pRegQp = &sharedQP[0];
 #else
 	pRegQp = NULL;
 #endif

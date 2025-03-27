@@ -153,7 +153,9 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 //**********************************************************************************************************
 
 //Use stack structure (context/register) for QControl
-//#define BAM_EMU_USE_KCONTEXT_Q_CTRL
+//The value represents the max_queues_per_thread, as this uses static (register) structure in kernel
+#define BAM_EMU_USE_KCONTEXT_Q_CTRL  1
+
 
 
 //**********************************************************************************************************

@@ -346,13 +346,9 @@ int main(int argc, char** argv) {
 #ifdef BAM_EMU_COMPILE  
 #ifdef  BAM_RUN_EMU_IN_BAM_KERNEL
 
-#ifdef BAM_EMU_USE_KCONTEXT_Q_CTRL
+//		ctrls[0]->pDevTgt_control->numEmuThreads = b_size;
+//		ctrls[0]->pDevTgt_control->numEmuThreads = b_size * 8;
 		ctrls[0]->pDevTgt_control->numEmuThreads = settings.numQueues;
-#else
-		ctrls[0]->pDevTgt_control->numEmuThreads = b_size;
-		ctrls[0]->pDevTgt_control->numEmuThreads = b_size * 8;
-//		ctrls[0]->pDevTgt_control->numEmuThreads = settings.numQueues;
-#endif
 
 		g_size = (settings.numThreads + ctrls[0]->pDevTgt_control->numEmuThreads + b_size - 1)/b_size;
 #endif
