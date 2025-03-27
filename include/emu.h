@@ -672,17 +672,19 @@ static void emulator_create_queue(bam_host_emulator *pEmu, uint16_t q_number, ui
 	
 	BAM_EMU_HOST_DBG_PRINT(verbose, "emulator_create_queue() q_mem_size = %d context_size = %d total = %d\n", mem_size, context_size, mem_size + context_size);
 
-	pQ->target_q_mem = createDma(pEmu->pCtrl, NVM_PAGE_ALIGN(mem_size + context_size, 1UL << 16), pEmu->cudaDevice);
 
-	pQ->pEmuQ = pQ->target_q_mem->vaddr;
+	pEmu->tgt.devQMem[q_idx].target_q_mem[cq] = createDma(pEmu->pCtrl, NVM_PAGE_ALIGN(mem_size + context_size, 1UL << 16), pEmu->cudaDevice);
+	
+
+	pQ->pEmuQ = pEmu->tgt.devQMem[q_idx].target_q_mem[cq]->vaddr;
+
 
 	if(context_size)
 	{
-		pEmu->tgt.queuePairs[q_idx].pContext = (storage_next_emuluator_context *)((char *)pQ->target_q_mem->vaddr + mem_size);
+		pEmu->tgt.queuePairs[q_idx].pContext = (storage_next_emuluator_context *)((char *)pQ->pEmuQ + mem_size);
 
 	}
 	
-	BAM_EMU_HOST_DBG_PRINT(verbose, "emulator_create_queue() target_q_mem = %p\n", pQ->target_q_mem);
 
 	
 	
@@ -1003,6 +1005,8 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	int qall_size = sizeof(bam_emulated_queue_pair) * BAM_EMU_MAX_QUEUES;
 	int mem_size = NVM_CTRL_MEM_MINSIZE * 2;
 	int map_model_size = 0;
+
+	BAM_EMU_HOST_DBG_PRINT(verbose,"initializeEmulator() sizeof(bam_emulated_queue_pair) = %ld\n", sizeof(bam_emulated_queue_pair));
 	
 	if(posix_memalign((void **)&pFileMem, 4096, mem_size))
 	{

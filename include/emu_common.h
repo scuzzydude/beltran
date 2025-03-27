@@ -132,22 +132,32 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 #define BAM_EMU_DEV_DBG_PRINT3(__verbose, __format, _v1, _v2, _v3) do      { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2, _v3); } while (0)
 #define BAM_EMU_DEV_DBG_PRINT4(__verbose, __format, _v1, _v2, _v3, _v4) do { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2, _v3, _v4); } while (0)
 
+//**********************************************************************************************************
+//*** Doorbells ***
+//**********************************************************************************************************
 
 
 #define EMU_DB_MEM_MAPPED_FILE        1  
 #define EMU_DB_MEM_ATOMIC_MANAGED     2  
 #define EMU_DB_MEM_ATOMIC_DEVICE      3
 
-
-
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
 #define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
-//#define BAM_EMU_USE_SHARED_Q_CTRL
+
+//**********************************************************************************************************
+//*** Kernel control memory locations  ***
+//**********************************************************************************************************
+
+//#define BAM_EMU_USE_SHARED_Q_CTRL //TODO: This doesn't work, not sure why, the mechanism is exactly the same as KCONTEXT_Q_CTRL.  Expect significant performance improvement, but would need more code work to work with ATOMIC_DEVICE 
+
 #define BAM_EMU_USE_KCONTEXT_Q_CTRL
 
 
+//**********************************************************************************************************
+//*** Emulator Common Structures  ***
+//**********************************************************************************************************
 
 typedef union
 {
@@ -234,7 +244,6 @@ typedef struct
 	uint32_t            head;
 	uint32_t            tail;
 
-	DmaPtr              target_q_mem;
 	void *              pEmuQ;
 	
 
@@ -245,8 +254,8 @@ typedef struct
 	bam_emulated_queue    sQ;
 	bam_emulated_queue    cQ;
 
-	int                   qp_enabled;
-	int                   q_number;
+	uint16_t                   qp_enabled;
+	uint16_t                   q_number;
 
 	storage_next_emuluator_context *pContext;
 	
@@ -285,6 +294,11 @@ typedef struct
 		
 } bam_emulated_target_control;
 	
+typedef struct
+{
+	DmaPtr              target_q_mem[2];
+} bam_emu_qmem;
+
 
 
 typedef struct
@@ -304,6 +318,8 @@ typedef struct
 	bam_emulated_target_control    *pTgt_control; //managed, shared with device
 	
 	bam_emulated_queue_pair        *pDevQPairs;
+
+	bam_emu_qmem                    devQMem[BAM_EMU_MAX_QUEUES];
 
   
 	bam_emu_mapper                 mapper;
