@@ -505,13 +505,8 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	uint32_t submit_count = 0;
 	bam_emulated_queue_pair *pShQp;
-#if defined(BAM_EMU_USE_SHARED_Q_CTRL) || defined(BAM_EMU_USE_KCONTEXT_Q_CTRL)
 #ifdef BAM_EMU_USE_KCONTEXT_Q_CTRL
 	bam_emulated_queue_pair sharedQP;
-#endif
-#ifdef BAM_EMU_USE_SHARED_Q_CTRL
-	__shared__ bam_emulated_queue_pair sharedQP;
-#endif
 	pShQp = &sharedQP;
 #else
 	pShQp = NULL;

@@ -150,8 +150,7 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 //*** Kernel control memory locations  ***
 //**********************************************************************************************************
 
-//#define BAM_EMU_USE_SHARED_Q_CTRL //TODO: This doesn't work, not sure why, the mechanism is exactly the same as KCONTEXT_Q_CTRL.  Expect significant performance improvement, but would need more code work to work with ATOMIC_DEVICE 
-
+//Use stack structure (context/register) for QControl
 #define BAM_EMU_USE_KCONTEXT_Q_CTRL
 
 
