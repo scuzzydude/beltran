@@ -518,7 +518,6 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 
 	BA_DBG_SET(pMgtTgtControl, 1, 0xBABA0001);
 	
-//	BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "TGT: kernel_Emulator mapper = %s(%d)  model = %s(%d)\n" pMgtTgtControl-> 
 
 
 	while(pMgtTgtControl->bRun)
@@ -550,7 +549,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 
 	if(count)
 	{
-		BA_DBG_SET(pMgtTgtControl, BA_DBG_IDX_MARK_RUN, 0xBABABABA);
+		BA_DBG_SET(pMgtTgtControl, BA_DBG_IDX_MARK_RUN, BA_DBG_VAL_MARK_RUN);
 	}
 	BA_DBG_SET(pMgtTgtControl, BA_DBG_IDX_RUN_COUNT, count);
 

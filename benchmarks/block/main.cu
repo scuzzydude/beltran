@@ -174,7 +174,7 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 #ifdef	BAM_RUN_EMU_IN_BAM_KERNEL
 //		printf("random_access_kernel call(%ld) n_req = %d n_qps = %d\n", tid, n_reqs,ctrls[ctrl]->n_qps);
 
-		if(tid < ctrls[ctrl]->n_qps)
+		if(tid < ctrls[ctrl]->pDevTgt_control->numEmuThreads)
 		{
 
 #if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_DEVICE) 
@@ -343,10 +343,14 @@ int main(int argc, char** argv) {
         uint64_t b_size = settings.blkSize;//64;
         uint64_t g_size = (settings.numThreads + b_size - 1)/b_size;//80*16;
 
+#ifdef BAM_EMU_COMPILE  
 #ifdef  BAM_RUN_EMU_IN_BAM_KERNEL
-		g_size = (settings.numThreads + settings.numQueues + b_size - 1)/b_size;
+		ctrls[0]->pDevTgt_control->numEmuThreads = settings.numQueues;
+
+		g_size = (settings.numThreads + ctrls[0]->pDevTgt_control->numEmuThreads + b_size - 1)/b_size;
 #endif
-		
+#endif
+
         uint64_t n_threads = b_size * g_size;
 
 

@@ -262,7 +262,8 @@ typedef struct
 
 typedef struct 
 {
-		
+
+		int                     numEmuThreads;
 		int 					numQueues;
 		volatile int            bRun;
 		int                     bDone;
