@@ -82,6 +82,8 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_DBG_CODE_PATH_D_NVME_EXE      BAM_DBG_CODE_MACRO_DEVICE(0x10)
 #define BAM_DBG_CODE_PATH_D_NVME_LOOP     BAM_DBG_CODE_MACRO_DEVICE(0x20)
 #define BAM_DBG_CODE_PATH_D_CQ_DRAIN      BAM_DBG_CODE_MACRO_DEVICE(0x40)
+#define BAM_DBG_CODE_PATH_D_INIT_Q_PAIR   BAM_DBG_CODE_MACRO_DEVICE(0x80)
+#define BAM_DBG_CODE_PATH_D_GET_Q_PAIR    BAM_DBG_CODE_MACRO_DEVICE(0x100)
 
 
 
@@ -151,7 +153,7 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 //**********************************************************************************************************
 
 //Use stack structure (context/register) for QControl
-#define BAM_EMU_USE_KCONTEXT_Q_CTRL
+//#define BAM_EMU_USE_KCONTEXT_Q_CTRL
 
 
 //**********************************************************************************************************
@@ -263,8 +265,8 @@ typedef struct
 typedef struct 
 {
 
-		int                     numEmuThreads;
-		int 					numQueues;
+		uint64_t                numEmuThreads;
+		uint32_t 				numQueues;
 		volatile int            bRun;
 		int                     bDone;
 		int                     nOneShot;

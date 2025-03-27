@@ -474,9 +474,13 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 }
 
 
-__device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_queue_pair         *pDevQPairs, bam_emulated_queue_pair *pQProxy)
+__device__ inline bam_emulated_queue_pair * emu_tgt_init_QueuePair(bam_emulated_target_control  *pMgtTgtControl, bam_emulated_queue_pair         *pDevQPairs, bam_emulated_queue_pair *pQProxy, uint32_t *pQueues_per_thread, uint32_t *pBase_q_idx)
 {
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+	uint32_t base_q_idx;
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_INIT_Q_PAIR);
+	
+	*pQueues_per_thread = 1;
 
 	if(NULL != pQProxy)
 	{
@@ -485,8 +489,42 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_q
 	}
 	else
 	{
-		return &pDevQPairs[tid];
+		if(pMgtTgtControl->numEmuThreads)
+		{
+			*pQueues_per_thread = pMgtTgtControl->numQueues / (uint32_t)pMgtTgtControl->numEmuThreads;
+
+		}
+
+		base_q_idx = tid * (*pQueues_per_thread);
+
+		*pBase_q_idx = base_q_idx;
+		
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT:(%ld) numQueues = %d numEmuThreads = %ld Queues_per_thread =%d\n", tid, pMgtTgtControl->numQueues, pMgtTgtControl->numEmuThreads, *pQueues_per_thread);
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT:(%ld) base_q_idx = %d\n", tid, base_q_idx);
+		
+		return &pDevQPairs[base_q_idx];
 	}
+}
+
+__device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_queue_pair         *pDevQPairs, bam_emulated_queue_pair *pQProxy, uint32_t queues_per_thread, uint32_t count, uint32_t base_q_idx)
+{
+	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_GET_Q_PAIR);
+	uint32_t q_idx = (count % queues_per_thread) + base_q_idx;
+
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT:(%ld) count =%d q_idx = %d\n", tid, count, q_idx);
+	
+	if(NULL != pQProxy)
+	{
+		return &pQProxy[q_idx];
+	}
+	else
+	{
+		return &pDevQPairs[q_idx];
+	}
+	
+
 }
 
 #ifdef BAM_RUN_EMU_IN_BAM_KERNEL
@@ -504,15 +542,17 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	uint32_t count = 0;
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	uint32_t submit_count = 0;
-	bam_emulated_queue_pair *pShQp;
+	bam_emulated_queue_pair *pRegQp;
+	uint32_t queues_per_thread;
+	uint32_t base_q_idx;
 #ifdef BAM_EMU_USE_KCONTEXT_Q_CTRL
 	bam_emulated_queue_pair sharedQP;
-	pShQp = &sharedQP;
+	pRegQp = &sharedQP;
 #else
-	pShQp = NULL;
+	pRegQp = NULL;
 #endif
 
-	pQP = emu_tgt_get_QueuePair(pDevQPairs, pShQp);
+	pQP = emu_tgt_init_QueuePair(pMgtTgtControl, pDevQPairs, pRegQp, &queues_per_thread, &base_q_idx);
 
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_Emulator ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
 
@@ -523,6 +563,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	while(pMgtTgtControl->bRun)
 	{
 
+		pQP = emu_tgt_get_QueuePair(pDevQPairs, pRegQp, queues_per_thread, count, base_q_idx);
 
 	 	BA_DBG_SET(pMgtTgtControl, 2, 0xBABA0002);
 		if(emu_tgt_SQ_Check(pMgtTgtControl, pQP))
@@ -579,10 +620,6 @@ static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number,
 			pEmu->tgt.queuePairs[q_idx].qp_enabled = bEnable;
 			pEmu->tgt.queuePairs[q_idx].q_number = q_number;
 			
-			if(bEnable)
-			{
-				pEmu->tgt.pTgt_control->numQueues++;
-			}
 			
 			cuda_err_chk(cudaMemcpy(&pEmu->tgt.pDevQPairs[q_idx], &pEmu->tgt.queuePairs[q_idx], sizeof(bam_emulated_queue_pair), cudaMemcpyHostToDevice));
 
@@ -606,7 +643,13 @@ static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number,
 
 	}
 	else
-	{
+	{	
+		//This is a hack, because we call emulator_update_d_queue() twice to update doorbells.  Let's count only first time when only SQ enabled
+		if(bEnable)
+		{
+			pEmu->tgt.pTgt_control->numQueues++;
+		}
+
 		BAM_EMU_HOST_DBG_PRINT(verbose, "emulator_update_d_queue() q_idx = %d SQ NOT ENABLED YET, SKIPPING UPDATE\n", q_idx);
 	}
 
