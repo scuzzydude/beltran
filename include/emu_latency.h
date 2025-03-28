@@ -195,14 +195,76 @@ __device__ inline int emu_model_private_data_check(bam_emu_target_model *pModel,
 	return 0;
 }
 
-__device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext)
+__device__ inline void emu_model_latency_enqueue(latency_context *pLatListHead, latency_context *pLatContext)
 {
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_LATENCY);
 
+	latency_context *pTemp = pLatListHead;
+	
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "LAT:emu_model_latency_enqueue() pLatListHead = %p pLatContext = %p  done_ns = %ld\n", pLatListHead, pLatContext, pLatContext->lat_context.done_ns);
+	
+	if(NULL == pTemp)
+	{
+		pLatListHead = pLatContext;
+		pLatContext->lat_context.pNext = NULL;
+
+	}
+	else
+	{
+		uint64_t ns = pLatContext->lat_context.done_ns;
+		while(pTemp)
+		{
+
+			BAM_EMU_DEV_DBG_PRINT2(verbose, "LAT:emu_model_latency_enqueue() pTemp = %p pTemp.done_ns  %ld\n", pTemp, pTemp->lat_context.done_ns);
+
+			if(ns >= pTemp->lat_context.done_ns)
+			{
+				pLatContext->lat_context.pNext = pTemp->lat_context.pNext;
+				pTemp->lat_context.pNext = pLatContext;
+				break;
+			}
+			else
+			{
+				//this shouldn't happen with loopback, but could wiht multi channels latency + jitter when 
+				//one IO lucks into a shorter path;
+				//deal with later
+				assert(0);
+			}
+
+		}
+
+	}
+
+
+}
+
+
+__device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext, void *pvThreadContext)
+{
+	latency_context *pLatListHead = (latency_context *)pvThreadContext;
+	latency_context *pLatContext = (latency_context *)pContext;
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_LATENCY);
 	emu_latency_model *pLatModel = (emu_latency_model *)pModel->pvDevPrivate;
 	
-	BAM_EMU_DEV_DBG_PRINT2(verbose, "LAT:emu_model_latency_submit() pModel = %p pContext = %p\n", pModel, pContext);
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_submit() pModel = %p pContext = %p pLatListHead = %p op = %x\n", pModel, pContext, pLatListHead, SN_CONTEXT_OP(pContext));
 
+	pLatContext->lat_context.start_ns = NS_Clock();
+	
+	if(LAT_LOOPBACK_LEVEL_TOP == pLatModel->nLoobackLevel)
+	{
+		//short circuit, it will be ready for completion immediately
+		pLatContext->lat_context.done_ns = pLatContext->lat_context.start_ns;
+		
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "LAT:emu_model_latency_submit() LAT_LOOPBACK_LEVEL_TOP = 0x%08x start_ns = %ld\n", pLatModel->nLoobackLevel, pLatContext->lat_context.start_ns);
+
+		emu_model_latency_enqueue(pLatListHead, pLatContext);
+
+		assert(0);
+		
+		return 0;
+	}
+
+	
 	switch(SN_CONTEXT_OP(pContext))
 	{
 		case SN_OP_READ:

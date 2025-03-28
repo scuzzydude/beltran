@@ -298,6 +298,8 @@ typedef struct
 	uint16_t                   qp_enabled;
 	uint16_t                   q_number;
 
+	void                  *pvThreadContext;
+
 	storage_next_emuluator_context *pContext;
 	
 } bam_emulated_queue_pair;

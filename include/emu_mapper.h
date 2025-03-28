@@ -101,7 +101,7 @@ static inline int emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapType
 //** Device Functions  
 //*******************************************************************************************************
 
-__device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext)
+__device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext, void *pvThreadContext)
 {
 	
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -116,15 +116,15 @@ __device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, stora
 	{
 
 		case EMU_MODEL_TYPE_LATENCY:
-			return emu_model_latency_submit(&pDevMapper->model, pContext);
+			return emu_model_latency_submit(&pDevMapper->model, pContext, pvThreadContext);
 			
 				
 		case EMU_MODEL_TYPE_AGGREGATION:
-			return emu_model_aggregation_submit(&pDevMapper->model, pContext);
+			return emu_model_aggregation_submit(&pDevMapper->model, pContext, pvThreadContext);
 			
 		
 		case EMU_MODEL_TYPE_VENDOR:
-			return emu_model_vendor_submit(&pDevMapper->model, pContext);
+			return emu_model_vendor_submit(&pDevMapper->model, pContext, pvThreadContext);
 
 		default:
 		BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_map_model_submit() : Invalid Model Type %d\n", pDevMapper->model.uModelType);
@@ -138,7 +138,7 @@ __device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, stora
 
 
 /* The mapper will be used later on to map to targets or map to other peer kernel threads based on data location (could be multi-path) or different kernel engines */ 
-__device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext)
+__device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext, void *pvThreadContext)
 {
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -151,9 +151,8 @@ __device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_nex
 	switch(pDevMapper->uMapType)
 	{
 		case EMU_MAP_TYPE_DIRECT:
-			return emu_tgt_map_model_submit(pDevMapper, pContext);
-		
-		
+			return emu_tgt_map_model_submit(pDevMapper, pContext, pvThreadContext);
+			
 		
 		default:
 			BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_map_Submit() : Invalid Map Type %d\n", pDevMapper->uMapType);

@@ -373,15 +373,14 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 	
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_NVMe_execute(%ld) call emu_tgt_map_Submit(%p, %p)\n", tid, pMgtTgtControl->pDevMapper, pContext);
 
-	return emu_tgt_map_Submit(pMgtTgtControl->pDevMapper, pContext);
-
+	return emu_tgt_map_Submit(pMgtTgtControl->pDevMapper, pContext, pQP->pvThreadContext);
 }
 #endif
 
 
 __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, uint32_t *pSubmit_count)
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_SUB);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_NVME_SUB);
 	nvm_cmd_t *pCmd;
 	nvm_cmd_t *pQ = &(((nvm_cmd_t *)(pQP->sQ.pEmuQ))[0]);
 	int count = 0;
@@ -443,7 +442,7 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 
 __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP)
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_SQ_CHECK);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_SQ_CHECK);
 	uint32_t db_tail;
 	nvm_cmd_t* pCmd;
 	int q_number = pQP->q_number;
@@ -568,7 +567,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 {
 	bam_emulated_queue_pair 	   *pQP;
 	uint32_t cq_db_head;
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_KER_QSTRM);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_KER_QSTRM);
 	uint32_t count = 0;
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	uint32_t submit_count = 0;
