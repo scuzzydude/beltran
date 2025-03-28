@@ -79,16 +79,18 @@ static inline int emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapType
 
 	model_mem_size += sizeof(bam_emu_mapper);
 
-    cuda_err_chk(cudaMemcpy(pTgt->pTgt_control->pDevMapper, &pTgt->mapper, sizeof(bam_emu_mapper), cudaMemcpyHostToDevice));
 
 	if(fnMdlPrvInit)
 	{
 		model_mem_size += fnMdlPrvInit(pEmu, &pTgt->mapper.model);
 	}
 
+    cuda_err_chk(cudaMemcpy(pTgt->pTgt_control->pDevMapper, &pTgt->mapper, sizeof(bam_emu_mapper), cudaMemcpyHostToDevice));
 
 	BAM_EMU_HOST_DBG_PRINT(verbose, "Initialized Mapper with type = %d (%s)\n", mapType, pTgt->mapper.szMapName);
 	BAM_EMU_HOST_DBG_PRINT(verbose, "Initialized Model  with type = %d (%s)\n", modelType, pTgt->mapper.model.szModelName);
+	BAM_EMU_HOST_DBG_PRINT(verbose, "Model pvDevPrivate           = %p     \n", pTgt->mapper.model.pvDevPrivate);
+	BAM_EMU_HOST_DBG_PRINT(verbose, "Model pvHostPrivate          = %p     \n", pTgt->mapper.model.pvHostPrivate);
 	
 
 	return model_mem_size;
@@ -101,6 +103,12 @@ static inline int emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapType
 
 __device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext)
 {
+	
+	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_MAPPER);
+
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_map_model_submit(%ld) uModelType = %d\n", tid, pDevMapper->model.uModelType);
 
 	/* Device function pointers complicated in CUDA and using all inline functions */
 	/* If burdensome later on, we can make the Models compile time selectable */
@@ -132,6 +140,11 @@ __device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, stora
 /* The mapper will be used later on to map to targets or map to other peer kernel threads based on data location (could be multi-path) or different kernel engines */ 
 __device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext)
 {
+	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_MAPPER);
+
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_map_Submit(%ld) uMapType = %d\n", tid, pDevMapper->uMapType);
 
 	/* Device function pointers complicated in CUDA and using all inline functions */
 	/* If burdensome later on, we can make the Models compile time selectable */

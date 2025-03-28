@@ -21,13 +21,7 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 //no reason this can't be 64K, just need to massage some stuff
 #define BAM_EMU_MAX_QUEUES 1024
 
-//controls emulation compile and benchmark enablement
-#define BAM_EMU_COMPILE 
-
-#define BAM_RUN_EMU_IN_BAM_KERNEL
-
 #define	KERNEL_DBG_ARRAY
-
 
 #ifdef KERNEL_DBG_ARRAY
 #define BA_DBG_SET(__p, __idx, __val) if(0 == (blockIdx.x * blockDim.x + threadIdx.x))  __p->debugA[__idx] = __val 
@@ -84,6 +78,10 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_DBG_CODE_PATH_D_CQ_DRAIN      BAM_DBG_CODE_MACRO_DEVICE(0x40)
 #define BAM_DBG_CODE_PATH_D_INIT_Q_PAIR   BAM_DBG_CODE_MACRO_DEVICE(0x80)
 #define BAM_DBG_CODE_PATH_D_GET_Q_PAIR    BAM_DBG_CODE_MACRO_DEVICE(0x100)
+#define BAM_DBG_CODE_PATH_D_MAPPER        BAM_DBG_CODE_MACRO_DEVICE(0x200) 
+#define BAM_DBG_CODE_PATH_D_LATENCY       BAM_DBG_CODE_MACRO_DEVICE(0x400) 
+
+
 
 
 
@@ -134,6 +132,34 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 #define BAM_EMU_DEV_DBG_PRINT3(__verbose, __format, _v1, _v2, _v3) do      { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2, _v3); } while (0)
 #define BAM_EMU_DEV_DBG_PRINT4(__verbose, __format, _v1, _v2, _v3, _v4) do { if( __verbose >= BAM_EMU_DBGLVL_COMPILE) printf(__format, _v1, _v2, _v3, _v4); } while (0)
 
+
+//**********************************************************************************************************
+//*** Emulator Control ***
+//**********************************************************************************************************
+
+//controls emulation compile and benchmark enablement
+#define BAM_EMU_COMPILE 
+
+//runs emalator from kernel threads launched by applicaiton (block benchmark only for now)
+#define BAM_RUN_EMU_IN_BAM_KERNEL
+
+
+//Runs the kernel from host thread
+#define BAM_EMU_TARGET_HOST_THREAD
+
+
+
+//TODO: Async Memcopy when Queues are configured seemed to either stall the EMU threads or never complete
+//Want to eventually have the emulator running so that the ADMIN queues can be created by the emulator and 
+//don't need to be faked out in libnvm.  For now, to move forward, bring up the emulator after the queues are configured
+#define BAM_EMU_START_EMU_POST_Q_CONFIG
+#define BAM_EMU_START_EMU_IN_APP_LAYER
+
+
+
+/* Early Simple Loopback w/o simulated latency or transfer */
+#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
+
 //**********************************************************************************************************
 //*** Doorbells ***
 //**********************************************************************************************************
@@ -158,6 +184,9 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 
 
 
+
+
+
 //**********************************************************************************************************
 //*** Emulator Common Structures  ***
 //**********************************************************************************************************
@@ -178,6 +207,15 @@ typedef struct
 	//or a pointer holder if mapped to device/emulator managed memory
 	uint64_t    storage_implementation_context[STORAGE_NEXT_CONTEXT_LEVELS];  
 } storage_next_emuluator_context;
+
+//Macros, incase we want to change the API later
+
+#define SN_CONTEXT_TAG(_context) (_context->pCmd->nvme_cmd.dword[0] >> 16)
+#define SN_CONTEXT_OP(_context) (_context->pCmd->nvme_cmd.dword[0] & 0x7F)
+#define SN_CONTEXT_LBA(_context) ((uint64_t)(((uint64_t)_context->pCmd->nvme_cmd.dword[11] << 32) | _context->pCmd->nvme_cmd.dword[10]))
+
+#define SN_OP_READ NVM_IO_READ
+
 
 #define EMU_CONTEXT storage_next_emuluator_context
 #define EMU_COMPONENT_NAME_LEN 64
@@ -314,9 +352,8 @@ typedef struct
 
 	bam_emulated_queue_pair        *queuePairs;
 
-	
-
 	DmaPtr d_queue_q_mem;
+
 	DmaPtr d_target_control_mem;
 
 	bam_emulated_target_control    *pTgt_control; //managed, shared with device
@@ -324,11 +361,8 @@ typedef struct
 	bam_emulated_queue_pair        *pDevQPairs;
 
 	bam_emu_qmem                    devQMem[BAM_EMU_MAX_QUEUES];
-
   
 	bam_emu_mapper                 mapper;
-
-	
 	
 } bam_target_emulator;
 
@@ -352,15 +386,9 @@ typedef struct
 	
 } bam_host_emulator;
 
-//TODO: Async Memcopy when Queues are configured seemed to either stall the EMU threads or never complete
-//Want to eventually have the emulator running so that the ADMIN queues can be created by the emulator and 
-//don't need to be faked out in libnvm.  For now, to move forward, bring up the emulator after the queues are configured
-#define BAM_EMU_START_EMU_POST_Q_CONFIG
-#define BAM_EMU_START_EMU_IN_APP_LAYER
 
 
 
-#define BAM_EMU_TARGET_HOST_THREAD
 
 
 
@@ -370,11 +398,6 @@ typedef struct
 #define BAM_EMU_DATA_IN  0
 #define BAM_EMU_DATA_OUT 1
 typedef ulonglong4 emu_copy_type;
-
-
-/* Early Simple Loopback w/o simulated latency or transfer */
-#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
-
 
 typedef uint32_t (*fnModelPrivateInit)(bam_host_emulator *pEmu, bam_emu_target_model *pModel);
 

@@ -284,7 +284,10 @@ int main(int argc, char** argv) {
     printf("Prop: deviceOverlap              = %d\n", properties.deviceOverlap);
     printf("Prop: sharedMemPerBlock          = %d\n", properties.sharedMemPerBlock );
     printf("Prop: sharedMemPerMultiprocessor = %d\n", properties.sharedMemPerMultiprocessor );
+    printf("Prop: multiProcessorCount        = %d\n", properties.multiProcessorCount);
+    printf("Prop: warpSize                   = %d\n", properties.warpSize);
 
+	
     try {
 
         const char* input_f;
@@ -445,6 +448,7 @@ int main(int argc, char** argv) {
 
 		cuda_err_chk(cudaStreamCreateWithFlags (&ctrls[0]->pEmu->tgt.bamStream, (cudaStreamDefault)));
 
+		start_emulation_target(ctrls[0]->pEmu);
 
         if (settings.random)
         {
@@ -459,7 +463,6 @@ int main(int argc, char** argv) {
 		printf("call bam kernel done\n");
 
 		
-		start_emulation_target(ctrls[0]->pEmu);
 
 		cuda_err_chk(cudaStreamSynchronize(ctrls[0]->pEmu->tgt.bamStream));
 
