@@ -96,6 +96,7 @@ __device__ void emu_tgt_DMA(void *dst_addr, void *src_addr, int copy_size, int d
 	}
 	
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_DMA() limit = %d sizeof(copy_type) =  %ld\n", limit, sizeof(emu_copy_type));
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_DMA() pSrc = %p pDst =  %p remainder = %d\n", pSrc, pDst, remainder);
 	
 #ifdef EMU_TIME_SIM_DMA
 	start_ticks = NS_Clock();
@@ -104,6 +105,8 @@ __device__ void emu_tgt_DMA(void *dst_addr, void *src_addr, int copy_size, int d
 	{
 		pDst[i] = pSrc[i];
 	}
+
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_DMA() LIMIT copy done pSrc = %p pDst =  %p remainder = %d\n", pSrc, pDst, remainder);
 	
 	if(remainder)
 	{
@@ -584,6 +587,23 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 }
 
 
+__device__ inline void memCpy32(uint32_t *pDest, uint32_t *pSrc, uint32_t len)
+{
+	uint32_t i;
+	uint32_t limit = (len / 4);
+		
+	if(len & 0x3)
+	{
+		assert(0);
+	}
+
+	for(i = 0; i < limit; i++)
+	{
+		pDest[i] = pSrc[i];
+	}
+
+
+}
 __device__ inline bam_emulated_queue_pair * emu_tgt_init_QueuePair(bam_emulated_target_control  *pMgtTgtControl, bam_emulated_queue_pair         *pDevQPairs, bam_emulated_queue_pair *pQProxy, uint32_t *pQueues_per_thread, uint32_t *pBase_q_idx)
 {
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -603,11 +623,11 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_init_QueuePair(bam_emulated_
 	*pBase_q_idx = base_q_idx;
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT:(%ld) numQueues = %d numEmuThreads = %ld Queues_per_thread =%d\n", tid, pMgtTgtControl->numQueues, pMgtTgtControl->numEmuThreads, *pQueues_per_thread);
-	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT:(%ld) base_q_idx = %d\n", tid, base_q_idx);
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT:(%ld) base_q_idx = %d pQProxy = %p\n", tid, base_q_idx, pQProxy);
 
 	if(NULL != pQProxy)
 	{
-		emu_tgt_DMA((void *)pQProxy,(void *)&pDevQPairs[base_q_idx],sizeof(bam_emulated_queue_pair) * (*pQueues_per_thread),0);
+		memCpy32((uint32_t *)pQProxy,(uint32_t *)&pDevQPairs[base_q_idx],sizeof(bam_emulated_queue_pair) * (*pQueues_per_thread));
 		return pQProxy;
 	}
 	else
@@ -664,7 +684,7 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 {
 	bam_emulated_queue_pair 	   *pQP;
 	uint32_t cq_db_head;
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_KER_QSTRM);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_KER_QSTRM);
 	uint32_t count = 0;
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	bam_emulated_queue_pair *pRegQp;
