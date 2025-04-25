@@ -195,17 +195,17 @@ __device__ inline int emu_model_private_data_check(bam_emu_target_model *pModel,
 	return 0;
 }
 
-__device__ inline void emu_model_latency_enqueue(latency_context *pLatListHead, latency_context *pLatContext)
+__device__ inline void emu_model_latency_enqueue(latency_context **ppLatListHead, latency_context *pLatContext)
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_LATENCY);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
 
-	latency_context *pTemp = pLatListHead;
+	latency_context *pTemp = *ppLatListHead;
 	
-	BAM_EMU_DEV_DBG_PRINT3(verbose, "LAT:emu_model_latency_enqueue() pLatListHead = %p pLatContext = %p  done_ns = %ld\n", pLatListHead, pLatContext, pLatContext->lat_context.done_ns);
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_enqueue() pTemp = %p ppLatListHead = %p pLatContext = %p  done_ns = %ld\n", pTemp, ppLatListHead, pLatContext, pLatContext->lat_context.done_ns);
 	
 	if(NULL == pTemp)
 	{
-		pLatListHead = pLatContext;
+		*ppLatListHead = pLatContext;
 		pLatContext->lat_context.pNext = NULL;
 
 	}
@@ -239,11 +239,11 @@ __device__ inline void emu_model_latency_enqueue(latency_context *pLatListHead, 
 }
 
 
-__device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext, void *pvThreadContext)
+__device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext, void **ppvThreadContext)
 {
-	latency_context *pLatListHead = (latency_context *)pvThreadContext;
+	latency_context **pLatListHead = (latency_context **) ppvThreadContext;
 	latency_context *pLatContext = (latency_context *)pContext;
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_LATENCY);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
 	emu_latency_model *pLatModel = (emu_latency_model *)pModel->pvDevPrivate;
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_submit() pModel = %p pContext = %p pLatListHead = %p op = %x\n", pModel, pContext, pLatListHead, SN_CONTEXT_OP(pContext));
@@ -259,8 +259,6 @@ __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, sto
 
 		emu_model_latency_enqueue(pLatListHead, pLatContext);
 
-		assert(0);
-		
 		return 0;
 	}
 
@@ -284,7 +282,31 @@ __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, sto
 }
 
 
+__device__ inline storage_next_emuluator_context * emu_model_latency_cull(bam_emu_target_model *pModel, void **ppvThreadContext)
+{
+	latency_context **ppLatListHead = (latency_context **) ppvThreadContext;
+	storage_next_emuluator_context *pTemp;
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_cull(%p, %p)\n", pModel, *ppLatListHead);
+	
 
+	if(*ppLatListHead)
+	{
+		uint64_t now_ns = NS_Clock();
+
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_cull(%ld, %ld)\n", now_ns, (*ppLatListHead)->lat_context.done_ns);
+
+		if(now_ns >= (*ppLatListHead)->lat_context.done_ns)	
+		{
+			pTemp = (storage_next_emuluator_context *) *ppLatListHead;
+			*ppLatListHead = (*ppLatListHead)->lat_context.pNext;
+			return pTemp;
+		}
+	}
+
+
+	return NULL;
+}
 
 #endif
 

@@ -101,12 +101,12 @@ static inline int emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapType
 //** Device Functions  
 //*******************************************************************************************************
 
-__device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext, void *pvThreadContext)
+__device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext, void **ppvThreadContext)
 {
 	
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_MAPPER);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_MAPPER);
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_map_model_submit(%ld) uModelType = %d\n", tid, pDevMapper->model.uModelType);
 
@@ -116,15 +116,15 @@ __device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, stora
 	{
 
 		case EMU_MODEL_TYPE_LATENCY:
-			return emu_model_latency_submit(&pDevMapper->model, pContext, pvThreadContext);
+			return emu_model_latency_submit(&pDevMapper->model, pContext, ppvThreadContext);
 			
 				
 		case EMU_MODEL_TYPE_AGGREGATION:
-			return emu_model_aggregation_submit(&pDevMapper->model, pContext, pvThreadContext);
+			return emu_model_aggregation_submit(&pDevMapper->model, pContext, ppvThreadContext);
 			
 		
 		case EMU_MODEL_TYPE_VENDOR:
-			return emu_model_vendor_submit(&pDevMapper->model, pContext, pvThreadContext);
+			return emu_model_vendor_submit(&pDevMapper->model, pContext, ppvThreadContext);
 
 		default:
 		BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_map_model_submit() : Invalid Model Type %d\n", pDevMapper->model.uModelType);
@@ -138,11 +138,11 @@ __device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, stora
 
 
 /* The mapper will be used later on to map to targets or map to other peer kernel threads based on data location (could be multi-path) or different kernel engines */ 
-__device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext, void *pvThreadContext)
+__device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_next_emuluator_context *pContext, void ** ppvThreadContext)
 {
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_MAPPER);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_MAPPER);
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_map_Submit(%ld) uMapType = %d\n", tid, pDevMapper->uMapType);
 
@@ -151,7 +151,7 @@ __device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_nex
 	switch(pDevMapper->uMapType)
 	{
 		case EMU_MAP_TYPE_DIRECT:
-			return emu_tgt_map_model_submit(pDevMapper, pContext, pvThreadContext);
+			return emu_tgt_map_model_submit(pDevMapper, pContext, ppvThreadContext);
 			
 		
 		default:
@@ -163,6 +163,50 @@ __device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_nex
 
 	return 1;
 }
+
+__device__ inline storage_next_emuluator_context * emu_tgt_model_Cull(bam_emu_mapper *pDevMapper, void ** ppvThreadContext)
+{
+	switch(pDevMapper->model.uModelType)
+	{
+
+		case EMU_MODEL_TYPE_LATENCY:
+			return emu_model_latency_cull(&pDevMapper->model, ppvThreadContext);
+			
+				
+		case EMU_MODEL_TYPE_AGGREGATION:
+			return NULL;//emu_model_aggregation_submit(&pDevMapper->model, pContext, pvThreadContext);
+			
+		
+		case EMU_MODEL_TYPE_VENDOR:
+			return NULL; //emu_model_vendor_submit(&pDevMapper->model, pContext, pvThreadContext);
+
+		default:
+			BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_model_Cull() : Invalid Model Type %d\n", pDevMapper->model.uModelType);
+		break;
+	}
+
+	return NULL;
+	
+}
+
+__device__ inline storage_next_emuluator_context * emu_tgt_map_Cull(bam_emu_mapper *pDevMapper, void ** ppvThreadContext)
+{
+
+	switch(pDevMapper->uMapType)
+	{
+		case EMU_MAP_TYPE_DIRECT:
+			return emu_tgt_model_Cull(pDevMapper, ppvThreadContext);
+				
+			
+		default:
+			BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_map_Cull() : Invalid Map Type %d\n", pDevMapper->uMapType);
+			break;
+	
+	
+	}
+	return NULL;
+}
+
 
 
 #endif /* __EMU_MAPPER_H */

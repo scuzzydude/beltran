@@ -80,6 +80,8 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_DBG_CODE_PATH_D_GET_Q_PAIR    BAM_DBG_CODE_MACRO_DEVICE(0x100)
 #define BAM_DBG_CODE_PATH_D_MAPPER        BAM_DBG_CODE_MACRO_DEVICE(0x200) 
 #define BAM_DBG_CODE_PATH_D_LATENCY       BAM_DBG_CODE_MACRO_DEVICE(0x400) 
+#define BAM_DBG_CODE_PATH_D_CULL          BAM_DBG_CODE_MACRO_DEVICE(0x800) 
+#define BAM_DBG_CODE_PATH_D_COMP          BAM_DBG_CODE_MACRO_DEVICE(0x1000) 
 
 
 
@@ -158,7 +160,7 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 
 
 /* Early Simple Loopback w/o simulated latency or transfer */
-#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
+//#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
 
 //**********************************************************************************************************
 //*** Doorbells ***
@@ -209,6 +211,7 @@ typedef struct
 } storage_next_emuluator_context;
 
 //Macros, incase we want to change the API later
+
 
 #define SN_CONTEXT_TAG(_context) (_context->pCmd->nvme_cmd.dword[0] >> 16)
 #define SN_CONTEXT_OP(_context) (_context->pCmd->nvme_cmd.dword[0] & 0x7F)
@@ -350,20 +353,15 @@ typedef struct
 	cudaStream_t            tgtStream;
 	cudaStream_t            queueStream;
 	cudaStream_t            bamStream;
-	
 
 	bam_emulated_queue_pair        *queuePairs;
 
 	DmaPtr d_queue_q_mem;
-
 	DmaPtr d_target_control_mem;
 
 	bam_emulated_target_control    *pTgt_control; //managed, shared with device
-	
 	bam_emulated_queue_pair        *pDevQPairs;
-
 	bam_emu_qmem                    devQMem[BAM_EMU_MAX_QUEUES];
-  
 	bam_emu_mapper                 mapper;
 	
 } bam_target_emulator;

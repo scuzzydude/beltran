@@ -134,10 +134,10 @@ __device__ void emu_tgt_DMA(void *dst_addr, void *src_addr, int copy_size, int d
 }
 
 
-__device__ inline void emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, uint32_t db_tail)
+__device__ inline int emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, uint32_t db_tail)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_SQ_PROCESS);
-	int slot_count;
+	int slot_count = 0;
 	void *src_addr;
 	void *dst_addr;
 	int copy_size;
@@ -195,7 +195,8 @@ __device__ inline void emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTg
 	}
 
 	pQP->sQ.head = db_tail;
-	
+
+	return slot_count;
 
 }
 __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtControl, bam_emulated_queue_pair *pQP, uint32_t cq_db_head)
@@ -367,20 +368,112 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, storage_next_emuluator_context *pContext, uint32_t cq_db_head)
 {
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_NVME_EXE);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_EXE);
 
-	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_NVMe_execute(%ld) call emu_tgt_map_Submit()\n", tid);
 	
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_NVMe_execute(%ld) call emu_tgt_map_Submit(%p, %p)\n", tid, pMgtTgtControl->pDevMapper, pContext);
 
-	return emu_tgt_map_Submit(pMgtTgtControl->pDevMapper, pContext, pQP->pvThreadContext);
+	return emu_tgt_map_Submit(pMgtTgtControl->pDevMapper, pContext, &pQP->pvThreadContext);
 }
 #endif
 
 
+__device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pContext, bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair      *pQP, uint32_t cq_db_head)
+{
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_COMP);
+	uint32_t		retries = 0;
+	const uint32_t	retry_limit = 10;
+	const uint32_t	retry_ns = 64;
+	uint16_t cid = SN_CONTEXT_TAG(pContext);
+	uint32_t		phase = 0x10000;
+		
+		
+		
+	//	uint32_t phase = 0;
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_tgt_NVMe_Complete() db_head = %d cq_tail = %d next_tail = %d cid = 0x%x\n",
+		 cq_db_head, pQP->cQ.tail, ((pQP->cQ.tail + 1) &pQP->cQ.q_size_minus_1), cid);
+
+	while (retries < retry_limit)
+	{
+		if (cq_db_head != (pQP->cQ.tail + 1))
+		{
+			nvm_cpl_t * 	pCmp = & (((nvm_cpl_t *) (pQP->cQ.pEmuQ))[pQP->cQ.tail]);
+
+
+			if (pQP->cQ.rollover & 0x1)
+			{
+				phase				= 0;
+			}
+
+			BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_tgt_NVMe_Complete() cid = 0x%04x cq_tail = %d rollover = %d\n", cid,
+				 pQP->cQ.tail, pQP->cQ.rollover);
+
+
+			pCmp->dword[0]		= 0;
+			pCmp->dword[1]		= 0;
+			pCmp->dword[2]		= ((uint32_t) pQP->q_number << 16) | (pQP->sQ.head);
+			pCmp->dword[3]		= phase | cid;
+
+
+			BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_tgt_NVMe_Complete() %p val[2] = %x val[3] = %x\n", &pCmp->dword[2],
+				 pCmp->dword[2], pCmp->dword[3]);
+
+			pQP->cQ.tail++;
+
+			pQP->cQ.tail		&= pQP->cQ.q_size_minus_1;
+
+			if (0 == pQP->cQ.tail)
+			{
+				pQP->cQ.rollover++;
+			}
+
+			return 0;
+		}
+		else 
+		{
+			BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_ERROR, "emu_tgt_NVMe_Complete() !!!QFULL db_head = %d cq_tail = %d retries = %d\n",
+				 cq_db_head, pQP->cQ.tail, retries);
+			retries++;
+			
+		    __nanosleep(retries * retry_ns);
+			
+		}
+	}
+
+	return 1;
+
+
+
+
+}
+
+__device__ inline uint32_t emu_tgt_Cull(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair      *pQP, uint32_t cq_db_head)
+{
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_CULL);
+	uint32_t count = 0;
+	storage_next_emuluator_context *pContext;
+	
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_Cull() pMgtTgtControl = %p pvThreadContext = %p\n", pMgtTgtControl, pQP->pvThreadContext);
+
+	while(NULL != (pContext = emu_tgt_map_Cull(pMgtTgtControl->pDevMapper, &pQP->pvThreadContext)))
+	{
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_Cull(%d) pContext = %p \n", count, pContext);
+		
+		emu_tgt_NVMe_Complete(pContext, pMgtTgtControl, pQP, cq_db_head);
+		
+
+		count++;
+		
+	}
+	return count;
+
+	
+}
+
+
 __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, uint32_t *pSubmit_count)
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_NVME_SUB);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_SUB);
 	nvm_cmd_t *pCmd;
 	nvm_cmd_t *pQ = &(((nvm_cmd_t *)(pQP->sQ.pEmuQ))[0]);
 	int count = 0;
@@ -442,11 +535,12 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 
 __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP)
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_SQ_CHECK);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_SQ_CHECK);
 	uint32_t db_tail;
 	nvm_cmd_t* pCmd;
 	int q_number = pQP->q_number;
-
+	int count = 0;
+	
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_SQ_Check(%p) \n", pQP);
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_SQ_Check(%s) \n", pMgtTgtControl->szName);
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_SQ_Check() q_number = %d \n", q_number);
@@ -474,7 +568,7 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 
 			if(db_tail != pQP->sQ.head)
 			{
-				emu_tgt_SQ_Process(pMgtTgtControl, pQP, db_tail);
+				count = emu_tgt_SQ_Process(pMgtTgtControl, pQP, db_tail);
 			}
 				
 		}
@@ -524,6 +618,9 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_init_QueuePair(bam_emulated_
 	}
 }
 
+
+
+
 //max performance case
 #if (BAM_EMU_USE_KCONTEXT_Q_CTRL == 1)
 __device__ inline bam_emulated_queue_pair * emu_tgt_get_QueuePair(bam_emulated_queue_pair         *pDevQPairs, bam_emulated_queue_pair *pQProxy, uint32_t queues_per_thread, uint32_t count, uint32_t base_q_idx)
@@ -570,7 +667,6 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_KER_QSTRM);
 	uint32_t count = 0;
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-	uint32_t submit_count = 0;
 	bam_emulated_queue_pair *pRegQp;
 	uint32_t queues_per_thread;
 	uint32_t base_q_idx;
@@ -591,9 +687,11 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 
 	while(pMgtTgtControl->bRun)
 	{
+		uint32_t submit_count;
 
 		pQP = emu_tgt_get_QueuePair(pDevQPairs, pRegQp, queues_per_thread, count, base_q_idx);
 
+#ifdef BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
 	 	BA_DBG_SET(pMgtTgtControl, 2, 0xBABA0002);
 		if(emu_tgt_SQ_Check(pMgtTgtControl, pQP))
 		{
@@ -605,6 +703,25 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 				emu_tgt_CQ_Drain(pMgtTgtControl, pQP, cq_db_head);
 			}
 		}
+#else
+	
+	 	BA_DBG_SET(pMgtTgtControl, 2, 0xBABA0002);
+		if(emu_tgt_SQ_Check(pMgtTgtControl, pQP))
+		{
+			BA_DBG_SET(pMgtTgtControl, 3, 0xBABA0003);
+			cq_db_head = emu_tgt_NVMe_Submit(pMgtTgtControl, pQP, &submit_count);
+
+	
+			if(emu_tgt_Cull(pMgtTgtControl, pQP, cq_db_head))
+			{
+				emu_tgt_CQ_Drain(pMgtTgtControl, pQP, cq_db_head);
+			}
+
+
+		}
+#endif
+
+
 
 #ifdef BAM_EMU_QTHREAD_ONE_SHOT
 	    if(count >= pMgtTgtControl->nOneShot)
