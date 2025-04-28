@@ -82,6 +82,8 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_DBG_CODE_PATH_D_LATENCY       BAM_DBG_CODE_MACRO_DEVICE(0x400) 
 #define BAM_DBG_CODE_PATH_D_CULL          BAM_DBG_CODE_MACRO_DEVICE(0x800) 
 #define BAM_DBG_CODE_PATH_D_COMP          BAM_DBG_CODE_MACRO_DEVICE(0x1000) 
+#define BAM_DBG_CODE_PATH_D_LAT_RECURSE   BAM_DBG_CODE_MACRO_DEVICE(0x2000)
+
 
 
 
