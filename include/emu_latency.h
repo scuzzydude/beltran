@@ -7,12 +7,18 @@
 
 /* This is arbitrary, we can probably extend latency chain longer, but just in case our implementation needs 
    per level context */
+
+#define EMU_LAT_MODEL_UPNEXT      (1)
+#define EMU_LAT_MODEL_CHECK_AVAIL (2)
+#define EMU_LAT_MODEL_POP_ALGO    EMU_LAT_MODEL_UPNEXT 
+
+
 #define EMU_LATENCY_MAX_CHAINS STORAGE_NEXT_CONTEXT_LEVELS
 
 typedef struct
 {
-	/* temp, this needs to be atomic */
-	uint64_t time_free_ns;
+	simt::atomic<uint64_t, simt::thread_scope_device> time_free_ns;
+	uint8_t pad0[24];
 
 } emu_latency_channel;
 
@@ -42,9 +48,19 @@ typedef struct
 	uint32_t per_k_transfer_multiplier;
 	
 	char     mnemonic[EMU_LATENCY_MNEMONIC_LEN];
+
+
+
 	
 	emu_latency_channel *pChannels;
 
+
+
+#if(EMU_LAT_MODEL_POP_ALGO  == EMU_LAT_MODEL_UPNEXT) 
+			simt::atomic<uint32_t, simt::thread_scope_device> up_next;
+			uint8_t pad0[28];
+#endif
+	
 
 
 } emu_latency_chain;
