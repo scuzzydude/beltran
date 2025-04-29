@@ -222,7 +222,7 @@ typedef struct
 #define SN_CONTEXT_TAG(_context) (_context->pCmd->nvme_cmd.dword[0] >> 16)
 #define SN_CONTEXT_OP(_context) (_context->pCmd->nvme_cmd.dword[0] & 0x7F)
 #define SN_CONTEXT_LBA(_context) ((uint64_t)(((uint64_t)_context->pCmd->nvme_cmd.dword[11] << 32) | _context->pCmd->nvme_cmd.dword[10]))
-
+#define SN_CONTEXT_NUM_BLOCKS(_context) ((_context->pCmd->nvme_cmd.dword[12] & 0xFFFF) + 1)
 #define SN_OP_READ NVM_IO_READ
 
 
@@ -240,7 +240,7 @@ typedef struct
 typedef struct 
 {
 	uint32_t uModelType;
-	
+	uint32_t block_size;	
 	char szModelName[EMU_COMPONENT_NAME_LEN];
 
 	BufferPtr d_model_private;
@@ -388,6 +388,7 @@ typedef struct
 	uint32_t 	          cudaDevice;
 	pthread_t          	  emu_threads[3];
 	int                   bRun;
+	uint32_t              sectorSize;
 	
 	
 } bam_host_emulator;

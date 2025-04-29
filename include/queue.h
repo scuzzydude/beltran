@@ -145,7 +145,7 @@ struct QueuePair
 
         this->block_size_minus_1 = ns.lba_data_size-1;
         this->block_size_log = std::log2(ns.lba_data_size);
-//        std::cout << "block size: " << this->block_size << "\tblock_size_log: " << this->block_size_log << std::endl ;
+        std::cout << "block size: " << this->block_size << "\tblock_size_log: " << this->block_size_log << std::endl ;
         this->nvmNamespace = ns.ns_id;
 
         //this->prpList = NVM_DMA_OFFSET(this->prp_mem, 0);

@@ -33,7 +33,8 @@ typedef union _latency_context
 		uint64_t start_ns;
 		uint64_t done_ns;
 		union _latency_context *pNext;
-		
+		uint32_t xfer_bytes;
+		uint32_t xfer_kbytes;
 	} lat_context;
 		
 } latency_context;
@@ -98,7 +99,7 @@ emu_latency_model simple_generic =
 		{0, 16, 30000, 0, 0, "TREAD_NAND",    NULL}, //1
 		{0, 1,  500,   0, 1, "TRANSFER_NAND", NULL}, //2
 		{0, 1,  200,   0, 1, "DECODE_NAND",   NULL}, //3
-		{0, 1,  200,   1, 1, "FLUSH",         NULL}, //4
+		{0, 1,  200,   10, 1, "FLUSH",         NULL}, //4
 			
 
 	}
@@ -303,6 +304,9 @@ __device__ inline void emu_model_update_channel_done_ns(emu_latency_chain *pChai
 	pChain->pChannels[channel].time_free_ns.store(channel_done_ns, simt::memory_order_release);
 }
 
+
+
+
 __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, latency_context *pLatContext, uint32_t level)
 {
 	int error = 0;
@@ -335,11 +339,26 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	
 	latency_adder_ns = pChain->latency_ns;
 
-	if(0)
+	if(pChain->jitter)
 	{
-		//jitter and per KB multipliers, increment latency_adder_ns; 
+		//TODO: BA - come up with a more semi-random (ns timestamps are always even....)
+		uint32_t rand_factor = ((uint32_t)pLatContext->lat_context.start_ns & 0xFFFF);
+		
+		uint32_t  cur_jitter = rand_factor % pChain->jitter;
 
+		latency_adder_ns += cur_jitter;
 	}
+
+	if(pChain->per_k_transfer_multiplier)
+	{
+		uint32_t xfer_factor = pLatContext->lat_context.xfer_kbytes * pChain->per_k_transfer_multiplier;
+
+		BAM_EMU_DEV_DBG_PRINT3(verbose, "LAT:emu_model_latency_recurse(%d) PER_K_XFER_MULT = %d xfer_factor = %d\n", level, pChain->per_k_transfer_multiplier, xfer_factor);
+
+		latency_adder_ns += xfer_factor;
+	}
+
+	
 
 	pLatContext->lat_context.done_ns += latency_adder_ns;
 
@@ -374,6 +393,27 @@ __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, sto
 
 		return 0;
 	}
+
+	//calculate the xfer parameters
+	pLatContext->lat_context.xfer_bytes = SN_CONTEXT_NUM_BLOCKS(pContext) * pModel->block_size;
+
+	if(pLatContext->lat_context.xfer_bytes < 1024)
+	{
+		pLatContext->lat_context.xfer_kbytes = 1;	
+	}
+	else
+	{
+		pLatContext->lat_context.xfer_kbytes = pLatContext->lat_context.xfer_bytes / 1024;
+		if(pLatContext->lat_context.xfer_bytes % 1024)
+		{
+			pLatContext->lat_context.xfer_kbytes++;
+		}
+
+	}
+		
+	
+	
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_submit() xfer_bytes = %d block_size = %d dword[12] = 0x%08x kbytes = %d\n", pLatContext->lat_context.xfer_bytes, pModel->block_size, pContext->pCmd->nvme_cmd.dword[12], pLatContext->lat_context.xfer_kbytes);
 
 	
 	switch(SN_CONTEXT_OP(pContext))

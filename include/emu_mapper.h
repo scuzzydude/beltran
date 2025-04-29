@@ -44,6 +44,9 @@ static inline int emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapType
 	}
 
 	pTgt->mapper.model.uModelType = modelType; 
+	pTgt->mapper.model.block_size = pEmu->sectorSize;
+
+	BAM_EMU_HOST_DBG_PRINT(verbose, "emulator_init_mapper(block_size = %d)  ** \n", pTgt->mapper.model.block_size);
 
 	switch(modelType)
 	{

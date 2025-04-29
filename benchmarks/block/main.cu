@@ -212,7 +212,9 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 	
 		
         uint64_t n_blocks = req_size >> ctrls[ctrl]->d_qps[queue].block_size_log; /// ctrls[ctrl].ns.lba_data_size;;
-        //printf("tid: %llu\tstart_block: %llu\tn_blocks: %llu\n", (unsigned long long) tid, (unsigned long long) start_block, (unsigned long long) n_blocks);
+
+		
+        //printf("tid: %llu\tstart_block: %llu\tn_blocks: %llu block_size_log = %d\n", (unsigned long long) tid, (unsigned long long) start_block, (unsigned long long) n_blocks, ctrls[ctrl]->d_qps[queue].block_size_log);
 
         uint8_t opcode;
         for (size_t i = 0; i < reqs_per_thread; i++) {
@@ -322,7 +324,7 @@ int main(int argc, char** argv) {
         for (size_t i = 0 ; i < settings.n_ctrls; i++)
 	{
 #ifdef BAM_EMU_COMPILE            
-            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  BAM_EMU_TARGET_ENABLE, settings.blkSize);
+            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  BAM_EMU_TARGET_ENABLE, settings.blkSize, settings.pageSize);
 #else
             ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues);
 #endif

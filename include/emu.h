@@ -1194,7 +1194,7 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 
 
 
-static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, bam_host_emulator **pEmulator, uint64_t emulationTargetFlags, uint32_t blkSize)
+static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, bam_host_emulator **pEmulator, uint64_t emulationTargetFlags, uint32_t blkSize, uint32_t sectorSize)
 {
 
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_INIT_EMU);
@@ -1208,6 +1208,8 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	int qall_size = sizeof(bam_emulated_queue_pair) * BAM_EMU_MAX_QUEUES;
 	int mem_size = NVM_CTRL_MEM_MINSIZE * 2;
 	int map_model_size = 0;
+
+	
 
 	BAM_EMU_HOST_DBG_PRINT(verbose,"initializeEmulator() sizeof(bam_emulated_queue_pair) = %ld\n", sizeof(bam_emulated_queue_pair));
 	
@@ -1262,6 +1264,8 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator(%p) pCtrl\n", pCtrl);
 
 	strcpy(pEmu->name, "BAM_EMULATOR");
+
+	pEmu->sectorSize = sectorSize;
 
 	*pEmulator = pEmu;
 	
