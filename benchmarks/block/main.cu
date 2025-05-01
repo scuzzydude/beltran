@@ -284,8 +284,8 @@ int main(int argc, char** argv) {
     }
 
     printf("Prop: deviceOverlap              = %d\n", properties.deviceOverlap);
-    printf("Prop: sharedMemPerBlock          = %d\n", properties.sharedMemPerBlock );
-    printf("Prop: sharedMemPerMultiprocessor = %d\n", properties.sharedMemPerMultiprocessor );
+    printf("Prop: sharedMemPerBlock          = %ld\n", properties.sharedMemPerBlock );
+    printf("Prop: sharedMemPerMultiprocessor = %ld\n", properties.sharedMemPerMultiprocessor );
     printf("Prop: multiProcessorCount        = %d\n", properties.multiProcessorCount);
     printf("Prop: warpSize                   = %d\n", properties.warpSize);
 

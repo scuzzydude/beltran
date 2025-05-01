@@ -89,6 +89,9 @@ typedef struct
 //*******************************************************************************************************
 //** Models
 //*******************************************************************************************************
+#pragma GCC diagnostic push
+//up_next gives error if initailized with 0 or NULL and both up_next and pad are compile time
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers" 
 
 /* Just have one model for reads, later we will have model for reads and writes seperately */
 emu_latency_model simple_generic =
@@ -112,6 +115,7 @@ emu_latency_model simple_generic =
 };
 
 
+#pragma GCC diagnostic pop
 
 
 //*******************************************************************************************************
@@ -120,10 +124,13 @@ emu_latency_model simple_generic =
 emu_latency_model *pWorkingModel = &simple_generic;
 
 
+
+
+
 uint32_t emu_model_latency_private_size(uint32_t *pTotal_channel_size)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_LAT_PSIZE);
-	int i;
+	uint32_t i;
 	
 	uint32_t size = sizeof(emu_latency_model);
 	*pTotal_channel_size = 0;
@@ -150,7 +157,7 @@ uint32_t emu_model_latency_private_init(bam_host_emulator *pEmu, bam_emu_target_
 	uint32_t size = emu_model_latency_private_size(&total_channel_size);
 	emu_latency_model *pLatModel;
 	emu_latency_channel *pChan;
-	int i;
+	uint32_t i;
 
 	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_latency_private_init() size = %d total_channel_size = %d\n", size, total_channel_size);
 
@@ -323,7 +330,6 @@ __device__ inline void emu_model_update_channel_done_ns(emu_latency_chain *pChai
 
 __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, latency_context *pLatContext, uint32_t level)
 {
-	int error = 0;
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LAT_RECURSE);
 	int channel;
 	emu_latency_chain *pChain;

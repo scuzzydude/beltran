@@ -64,6 +64,8 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_DBG_CODE_PATH_H_CLEANUP_EMU   0x40
 #define BAM_DBG_CODE_PATH_H_INIT_MAPPER   0x80
 #define BAM_DBG_CODE_PATH_H_LAT_PSIZE     0x100
+#define BAM_DBG_CODE_PATH_H_INIT_AGG      0x200
+#define BAM_DBG_CODE_PATH_H_INIT_VENDOR   0x400
 
 
 
@@ -83,6 +85,8 @@ __device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
 #define BAM_DBG_CODE_PATH_D_CULL          BAM_DBG_CODE_MACRO_DEVICE(0x800) 
 #define BAM_DBG_CODE_PATH_D_COMP          BAM_DBG_CODE_MACRO_DEVICE(0x1000) 
 #define BAM_DBG_CODE_PATH_D_LAT_RECURSE   BAM_DBG_CODE_MACRO_DEVICE(0x2000)
+#define BAM_DBG_CODE_PATH_D_AGG           BAM_DBG_CODE_MACRO_DEVICE(0x4000)
+#define BAM_DBG_CODE_PATH_D_VENDOR        BAM_DBG_CODE_MACRO_DEVICE(0x8000)
 
 
 

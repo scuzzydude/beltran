@@ -43,6 +43,10 @@
 
 volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator *pEmu, nvm_queue_t *pQueue, int *pNeedDevicePtr)
 {
+		int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_CREATE_Q );
+
+		BAM_EMU_HOST_DBG_PRINT(verbose, "emu_host_get_db_pointer(%d, %d, %p, %p, %p)\n", qidx, cq, pEmu, pQueue, pNeedDevicePtr);
+
 		*pNeedDevicePtr = 1;
 
 #if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_MANAGED) 
@@ -975,7 +979,6 @@ void * launch_emu_target(void *pvEmu)
 	int             count = 0;
 	int 			verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_THREAD);
 
-	BAM_EMU_HOST_DBG_PRINT(verbose, "launch_emu_target(%d)\n", 0);
 
 #ifdef BAM_EMU_QTHREAD_ONE_SHOT
 	pEmu->tgt.pTgt_control->nOneShot = 1;
@@ -993,6 +996,7 @@ void * launch_emu_target(void *pvEmu)
 
 #endif
 
+	BAM_EMU_HOST_DBG_PRINT(verbose, "launch_emu_target(%p)\n", pvEmu);
 
 	while(pEmu->bRun)
 	{
@@ -1189,8 +1193,6 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 
 }
 
-
-
 static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, bam_host_emulator **pEmulator, uint64_t emulationTargetFlags, uint32_t blkSize, uint32_t sectorSize)
 {
 
@@ -1306,7 +1308,7 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	
 	cuda_err_chk(cudaMallocHost(&pEmu->tgt.queuePairs, qall_size, 0));
 
-	printf("host queuePairs = %p size = %ld\n", pEmu->tgt.queuePairs, qall_size);
+	printf("host queuePairs = %p size = %d\n", pEmu->tgt.queuePairs, qall_size);
 	
 	cuda_err_chk(cudaMallocManaged(&pEmu->tgt.pTgt_control, sizeof(bam_emulated_target_control)));
 
