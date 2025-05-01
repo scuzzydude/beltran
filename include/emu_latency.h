@@ -12,8 +12,10 @@
 #define EMU_LAT_MODEL_CHECK_AVAIL (2)
 #define EMU_LAT_MODEL_POP_ALGO    EMU_LAT_MODEL_UPNEXT 
 
-
-#define EMU_LATENCY_MAX_CHAINS STORAGE_NEXT_CONTEXT_LEVELS
+//arbitrary - can make dynmaic later.  the emu_latency_model is static, but the channels are dynamic allocated at the end of the 
+//emu_latency_model structure when allocated, requiring fix up of pointers.  Making the emu_latency_model dynamic requires extra 
+//calclulations, and results in a deeper recursive (inline) call stack, so should put in some stack safety checks
+#define EMU_LATENCY_MAX_CHAINS (8) 
 
 typedef struct
 {
@@ -35,10 +37,13 @@ typedef union _latency_context
 		union _latency_context *pNext;
 		uint32_t xfer_bytes;
 		uint32_t xfer_kbytes;
+		uint32_t lat_error;
 	} lat_context;
 		
 } latency_context;
 
+#define LAT_STAT_GOOD 0
+#define LAT_STAT_ERR  1 
 
 typedef struct
 {
@@ -88,7 +93,7 @@ typedef struct
 /* Just have one model for reads, later we will have model for reads and writes seperately */
 emu_latency_model simple_generic =
 {
-	0, //LAT_LOOPBACK_LEVEL_TOP, //0, //loopback
+	0,// LAT_LOOPBACK_LEVEL_TOP, //0, //loopback
 	5, //chain_count
 	0, //channel_offset - dynamically filled in
 	0, //total_channel_size - dyanmically filled in
@@ -264,7 +269,7 @@ __device__ inline void emu_model_latency_enqueue(latency_context **ppLatListHead
 #if(EMU_LAT_MODEL_POP_ALGO == EMU_LAT_MODEL_UPNEXT)
 __device__ inline int emu_mode_find_channel(emu_latency_chain *pChain, uint64_t *pChDoneNs)
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_LAT_RECURSE);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LAT_RECURSE);
 	int channel = -1;
 	uint32_t cht;
 
@@ -277,11 +282,13 @@ __device__ inline int emu_mode_find_channel(emu_latency_chain *pChain, uint64_t 
 		cht = pChain->up_next.fetch_add(1, simt::memory_order_relaxed);
 
 		channel = cht % pChain->channels;
+
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_mode_find_channel(%p) cht = %d total_channels = %d channel = %d \n", pChain, cht, pChain->channels, channel);
+
 	}
 	
 	*pChDoneNs = pChain->pChannels[channel].time_free_ns.load(simt::memory_order_acquire);
 		
-	BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_mode_find_channel(%p) cht = %d total_channels = %d channel = %d \n", pChain, cht, pChain->channels, channel);
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "emu_mode_find_channel() *pChDoneNs = %ld\n", *pChDoneNs);
 
 
@@ -306,28 +313,63 @@ __device__ inline void emu_model_update_channel_done_ns(emu_latency_chain *pChai
 
 
 
+#define NO_RECURSION
+#ifdef NO_RECURSION
+#define STOP_RECURSION 1
+#define CONTINUE_RECURSION 0
+#else
+#define STOP_RECURSION 0
+#endif
 
 __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, latency_context *pLatContext, uint32_t level)
 {
 	int error = 0;
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_LAT_RECURSE);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LAT_RECURSE);
 	int channel;
 	emu_latency_chain *pChain;
 	uint64_t channel_done_ns;
 	uint64_t latency_adder_ns;
+	const int stop_recursion = STOP_RECURSION;
 
+	
+	static int counter = 0;
+
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) counter = %d\n", level, counter++);
+
+	
+	
+	assert(pLatModel);
+	assert(pLatContext);
+	assert(level < EMU_LATENCY_MAX_CHAINS);
+	
 	if(level == pLatModel->chain_count)
 	{
-		return 0;
+		return stop_recursion;
+	}
+
+	assert(level < pLatModel->chain_count);
+
+	if(pLatModel->nLoobackLevel)
+	{
+		if((1 << level) & pLatModel->nLoobackLevel)
+		{
+			return stop_recursion;
+		}
+
 	}
 	
 
 	assert(level < pLatModel->chain_count);
 	assert(level < EMU_LATENCY_MAX_CHAINS);
+
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) pChain = %p\n", level, &pLatModel->latency_chain[level]);
 		
 	pChain = &pLatModel->latency_chain[level];
 
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) CALL emu_mode_find_channel pChain = %p\n", level, pChain);
+
 	channel = emu_mode_find_channel(pChain, &channel_done_ns);
+
 	
 	if((0 == channel_done_ns) || (channel_done_ns < pLatContext->lat_context.start_ns))
 	{
@@ -344,9 +386,11 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 		//TODO: BA - come up with a more semi-random (ns timestamps are always even....)
 		uint32_t rand_factor = ((uint32_t)pLatContext->lat_context.start_ns & 0xFFFF);
 		
-		uint32_t  cur_jitter = rand_factor % pChain->jitter;
+		uint32_t cur_jitter = rand_factor % pChain->jitter;
 
-		latency_adder_ns += cur_jitter;
+		//BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_recurse(%d) JITTER rand_factor = %d jitter = %d cur_jitter = %d\n", level, rand_factor, pChain->jitter, rand_factor % pChain->jitter);
+		
+		latency_adder_ns += (cur_jitter);
 	}
 
 	if(pChain->per_k_transfer_multiplier)
@@ -365,15 +409,18 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	emu_model_update_channel_done_ns(pChain, channel, pLatContext->lat_context.done_ns);
 
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_recurse(%d) latency_adder_ns = %ld channel = %d context.done_ns = %ld\n", level, latency_adder_ns, channel, pLatContext->lat_context.done_ns);
-
+#ifdef NO_RECURSION
+	return CONTINUE_RECURSION;
+#else
 	return emu_model_latency_recurse(pLatModel, pLatContext, level + 1);
+#endif
 }
 
 __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext, void **ppvThreadContext)
 {
 	latency_context **pLatListHead = (latency_context **) ppvThreadContext;
 	latency_context *pLatContext = (latency_context *)pContext;
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_LATENCY);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
 	emu_latency_model *pLatModel = (emu_latency_model *)pModel->pvDevPrivate;
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_submit() pModel = %p pContext = %p pLatListHead = %p op = %x\n", pModel, pContext, pLatListHead, SN_CONTEXT_OP(pContext));
@@ -411,6 +458,7 @@ __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, sto
 
 	}
 		
+	pLatContext->lat_context.lat_error = LAT_STAT_GOOD;
 	
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_submit() xfer_bytes = %d block_size = %d dword[12] = 0x%08x kbytes = %d\n", pLatContext->lat_context.xfer_bytes, pModel->block_size, pContext->pCmd->nvme_cmd.dword[12], pLatContext->lat_context.xfer_kbytes);
@@ -421,15 +469,41 @@ __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, sto
 		case SN_OP_READ:
 			if(SN_OP_READ == pLatModel->model_op_type)
 			{
+	
+#ifdef NO_RECURSION
+				uint32_t i;
+
+				
+				for(i = 0; i < EMU_LATENCY_MAX_CHAINS; i++)
+				{
+					if(STOP_RECURSION == emu_model_latency_recurse(pLatModel, pLatContext, i))
+					{
+						break;
+					}
+
+				}
+				if(LAT_STAT_GOOD == pLatContext->lat_context.lat_error)
+				{
+					emu_model_latency_enqueue(pLatListHead, pLatContext);
+				}
+				else
+				{
+					BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "LAT:CALL emu_model_latency_recurse() CALL(SN_OP_READ) ERROR %d\n", pLatContext->lat_context.lat_error);
+				}
+#else
+			
 				if(emu_model_latency_recurse(pLatModel, pLatContext, 0))
 				{
-					BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "LAT:emu_model_latency_recurse() CALL(SN_OP_READ) ERROR %d\n", 0);
+					BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "LAT:CALL emu_model_latency_recurse() CALL(SN_OP_READ) ERROR %d\n", 0);
 				}
 				else
 				{
 					BAM_EMU_DEV_DBG_PRINT1(verbose, "LAT:emu_model_latency_recurse() DONE(SN_OP_READ) total_latency = %ld (ns)\n", pLatContext->lat_context.done_ns - pLatContext->lat_context.start_ns);
 					emu_model_latency_enqueue(pLatListHead, pLatContext);
 				}
+
+#endif
+
 			}
 			else
 			{
