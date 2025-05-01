@@ -542,7 +542,6 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 	uint32_t db_tail;
 	nvm_cmd_t* pCmd;
 	int q_number = pQP->q_number;
-	int count = 0;
 	
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_SQ_Check(%p) \n", pQP);
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_SQ_Check(%s) \n", pMgtTgtControl->szName);
@@ -571,7 +570,7 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 
 			if(db_tail != pQP->sQ.head)
 			{
-				count = emu_tgt_SQ_Process(pMgtTgtControl, pQP, db_tail);
+				emu_tgt_SQ_Process(pMgtTgtControl, pQP, db_tail);
 			}
 				
 		}
@@ -771,7 +770,6 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number, int bEnable = 1)
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_UPDATEDQ);
-	bam_emulated_queue_pair aQP;
 	uint16_t q_idx = q_number - 1;
 	
 	
@@ -819,7 +817,6 @@ static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number,
 		BAM_EMU_HOST_DBG_PRINT(verbose, "emulator_update_d_queue() q_idx = %d SQ NOT ENABLED YET, SKIPPING UPDATE\n", q_idx);
 	}
 
-//	usleep(100000);
 	BAM_EMU_HOST_DBG_PRINT(verbose, "emulator_update_d_queue() EXIT q_idx = %d bEnable = %d\n", q_idx, bEnable);
 
 		

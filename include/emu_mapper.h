@@ -11,9 +11,6 @@
 static inline int emulator_init_mapper(bam_host_emulator *pEmu, uint32_t mapType, uint32_t modelType)
 {
 	int model_mem_size = 0;
-	int private_size = 0;
-	bam_emu_target_model *pModel;
-	bam_emu_mapper *pMap;
 	bam_target_emulator *pTgt;
 	fnModelPrivateInit fnMdlPrvInit = NULL;
 	

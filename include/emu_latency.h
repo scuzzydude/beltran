@@ -416,6 +416,7 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 #endif
 }
 
+
 __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, storage_next_emuluator_context *pContext, void **ppvThreadContext)
 {
 	latency_context **pLatListHead = (latency_context **) ppvThreadContext;
