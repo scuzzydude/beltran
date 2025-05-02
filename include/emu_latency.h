@@ -96,7 +96,7 @@ typedef struct
 /* Just have one model for reads, later we will have model for reads and writes seperately */
 emu_latency_model simple_generic =
 {
-	0,// LAT_LOOPBACK_LEVEL_TOP, //0, //loopback
+	LAT_LOOPBACK_LEVEL_TOP, //0, //loopback
 	5, //chain_count
 	0, //channel_offset - dynamically filled in
 	0, //total_channel_size - dyanmically filled in

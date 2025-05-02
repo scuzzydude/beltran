@@ -279,8 +279,66 @@ __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtCont
 
 
 
+#define NEW_QFULL_HANDLER
 
 
+#ifdef NEW_QFULL_HANDLER
+__device__ inline int emu_tgt_NVMe_loopback(bam_emulated_target_control * pMgtTgtControl,
+	 bam_emulated_queue_pair * pQP, uint16_t cid, uint32_t cq_db_head)
+{
+	int 			verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_LOOP);
+	uint32_t		phase = 0x10000;
+
+	//	uint32_t phase = 0;
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_tgt_NVMe_loopback() db_head = %d cq_tail = %d next_tail = %d cid = 0x%x\n",
+		 cq_db_head, pQP->cQ.tail, ((pQP->cQ.tail + 1) &pQP->cQ.q_size_minus_1), cid);
+
+		if (cq_db_head != (pQP->cQ.tail + 1))
+		{
+			nvm_cpl_t * 	pCmp = & (((nvm_cpl_t *) (pQP->cQ.pEmuQ))[pQP->cQ.tail]);
+
+			verbose 			= 0;
+
+			if (pQP->cQ.rollover & 0x1)
+			{
+				phase				= 0;
+			}
+
+			BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_tgt_NVMe_loopback() cid = 0x%04x cq_tail = %d rollover = %d\n", cid,
+				 pQP->cQ.tail, pQP->cQ.rollover);
+
+
+			pCmp->dword[0]		= 0;
+			pCmp->dword[1]		= 0;
+			pCmp->dword[2]		= ((uint32_t) pQP->q_number << 16) | (pQP->sQ.head);
+			pCmp->dword[3]		= phase | cid;
+
+
+			BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_tgt_NVMe_loopback() %p val[2] = %x val[3] = %x\n", &pCmp->dword[2],
+				 pCmp->dword[2], pCmp->dword[3]);
+
+			pQP->cQ.tail++;
+
+			pQP->cQ.tail		&= pQP->cQ.q_size_minus_1;
+
+			if (0 == pQP->cQ.tail)
+			{
+				pQP->cQ.rollover++;
+			}
+
+			return 0;
+		}
+		else 
+		{
+			BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_tgt_NVMe_loopback() !!!QFULL db_head = %d cq_tail = %d retries = %d rollover =%d\n",
+				 cq_db_head, pQP->cQ.tail, 0, pQP->cQ.rollover);
+
+			return 1;
+		}
+	
+}
+
+#else
 
 __device__ inline int emu_tgt_NVMe_loopback(bam_emulated_target_control * pMgtTgtControl,
 	 bam_emulated_queue_pair * pQP, uint16_t cid, uint32_t cq_db_head)
@@ -289,7 +347,7 @@ __device__ inline int emu_tgt_NVMe_loopback(bam_emulated_target_control * pMgtTg
 	uint32_t		phase = 0x10000;
 	uint32_t		retries = 0;
 	const uint32_t	retry_limit = 10;
-	const uint32_t	retry_ns = 64;
+	const uint32_t	retry_ns = 1000;
 
 	//	uint32_t phase = 0;
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_tgt_NVMe_loopback() db_head = %d cq_tail = %d next_tail = %d cid = 0x%x\n",
@@ -334,19 +392,23 @@ __device__ inline int emu_tgt_NVMe_loopback(bam_emulated_target_control * pMgtTg
 		}
 		else 
 		{
-			BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_ERROR, "emu_tgt_NVMe_loopback() !!!QFULL db_head = %d cq_tail = %d retries = %d\n",
-				 cq_db_head, pQP->cQ.tail, retries);
+			BAM_EMU_DEV_DBG_PRINT4(BAM_EMU_DBGLVL_ERROR, "emu_tgt_NVMe_loopback() !!!QFULL db_head = %d cq_tail = %d retries = %d rollover =%d\n",
+				 cq_db_head, pQP->cQ.tail, retries, pQP->cQ.rollover);
 			retries++;
 			
 		    __nanosleep(retries * retry_ns);
+
+			
+			cq_db_head = emu_tgt_read_doorbell(&pQP->cQ);
 			
 		}
 	}
-
+	assert(0);
+	
 	return 1;
 }
 
-
+#endif
 
 
 
@@ -385,12 +447,55 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 #endif
 
 
+
+#ifdef NEW_QFULL_HANDLER
+__device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pContext, bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair      *pQP, uint32_t cq_db_head)
+{
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_COMP);
+	uint16_t cid = SN_CONTEXT_TAG(pContext);
+	uint32_t		phase = 0x10000;
+		
+	nvm_cpl_t * 	pCmp = & (((nvm_cpl_t *) (pQP->cQ.pEmuQ))[pQP->cQ.tail]);
+
+
+	if (pQP->cQ.rollover & 0x1)
+	{
+		phase				= 0;
+	}
+
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_tgt_NVMe_Complete() cid = 0x%04x cq_tail = %d rollover = %d\n", cid,
+				 pQP->cQ.tail, pQP->cQ.rollover);
+
+
+	pCmp->dword[0]		= 0;
+	pCmp->dword[1]		= 0;
+	pCmp->dword[2]		= ((uint32_t) pQP->q_number << 16) | (pQP->sQ.head);
+	pCmp->dword[3]		= phase | cid;
+
+
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_tgt_NVMe_Complete() %p val[2] = %x val[3] = %x\n", &pCmp->dword[2],
+				 pCmp->dword[2], pCmp->dword[3]);
+
+	pQP->cQ.tail++;
+
+	pQP->cQ.tail		&= pQP->cQ.q_size_minus_1;
+
+	if (0 == pQP->cQ.tail)
+	{
+				pQP->cQ.rollover++;
+	}
+
+	return 0;
+	
+}
+
+#else
 __device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pContext, bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair      *pQP, uint32_t cq_db_head)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_COMP);
 	uint32_t		retries = 0;
 	const uint32_t	retry_limit = 10;
-	const uint32_t	retry_ns = 64;
+	const uint32_t	retry_ns = 256;
 	uint16_t cid = SN_CONTEXT_TAG(pContext);
 	uint32_t		phase = 0x10000;
 		
@@ -438,8 +543,8 @@ __device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pCon
 		}
 		else 
 		{
-			BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_ERROR, "emu_tgt_NVMe_Complete() !!!QFULL db_head = %d cq_tail = %d retries = %d\n",
-				 cq_db_head, pQP->cQ.tail, retries);
+			BAM_EMU_DEV_DBG_PRINT4(BAM_EMU_DBGLVL_ERROR, "emu_tgt_NVMe_Complete() !!!QFULL db_head = %d cq_tail = %d retries = %d  cid = %d\n",
+				 cq_db_head, pQP->cQ.tail, retries, cid);
 			retries++;
 			
 		    __nanosleep(retries * retry_ns);
@@ -447,12 +552,35 @@ __device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pCon
 		}
 	}
 
+	assert(0);
 	return 1;
 
 
 
 
 }
+#endif
+
+__device__ inline uint32_t emu_CQ_Ready(bam_emulated_queue_pair      *pQP, uint32_t cq_db_head)
+{
+	
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_CULL);
+	
+	if (cq_db_head != (pQP->cQ.tail + 1))
+	{
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT:emu_CQ_Ready() NOT_READY cq_db_head = %d tail = %d\n", cq_db_head, pQP->cQ.tail);
+
+		return 1;
+	}
+	else
+	{
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT:emu_CQ_Ready() NOT_READY cq_db_head = %d tail = %d\n", cq_db_head, pQP->cQ.tail);
+	
+		return 0;
+	}
+}
+
+
 
 __device__ inline uint32_t emu_tgt_Cull(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair      *pQP, uint32_t cq_db_head)
 {
@@ -462,16 +590,47 @@ __device__ inline uint32_t emu_tgt_Cull(bam_emulated_target_control    *pMgtTgtC
 	
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_Cull() pMgtTgtControl = %p pvThreadContext = %p\n", pMgtTgtControl, pQP->pvThreadContext);
 
+
+#ifdef NEW_QFULL_HANDLER
+
+	while(emu_CQ_Ready(pQP, cq_db_head))
+	{
+		pContext = emu_tgt_map_Cull(pMgtTgtControl->pDevMapper, &pQP->pvThreadContext);
+
+		if(pContext)
+		{
+			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_Cull(%d) pContext = %p \n", count, pContext);
+			
+			emu_tgt_NVMe_Complete(pContext, pMgtTgtControl, pQP, cq_db_head);
+			
+			count++;
+
+		}
+		else
+		{
+			break;
+		}
+	}
+
+
+
+
+
+
+#else
 	while(NULL != (pContext = emu_tgt_map_Cull(pMgtTgtControl->pDevMapper, &pQP->pvThreadContext)))
 	{
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_Cull(%d) pContext = %p \n", count, pContext);
 		
 		emu_tgt_NVMe_Complete(pContext, pMgtTgtControl, pQP, cq_db_head);
-		
+
 
 		count++;
 		
 	}
+
+#endif
+
 	return count;
 
 	
@@ -513,7 +672,14 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 
 		if(emu_tgt_NVMe_execute(pMgtTgtControl, pQP, pContext, cq_db_head))
 		{
+#ifdef NEW_QFULL_HANDLER
+		    //TODO:  Add counter for QFULL (it is expected)
+		
+			break;
+#else
 			BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "TGT: emu_tgt_NVMe_execute(%d) ERROR!!!\n", pQP->q_number);
+#endif
+
 		}
 		else
 		{
@@ -973,8 +1139,8 @@ __global__ void kernel_oneshotStream(bam_emulated_target_control    *pMgtTgtCont
 void * launch_emu_target(void *pvEmu)
 {
 #ifndef	BAM_RUN_EMU_IN_BAM_KERNEL
-
 	bam_host_emulator * pEmu = (bam_host_emulator *)pvEmu;
+
 	int             heartbeat_usec = 1000 * 1000;
 	int             count = 0;
 	int 			verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_THREAD);
@@ -1018,6 +1184,9 @@ void * launch_emu_target(void *pvEmu)
 	
 	BAM_EMU_HOST_DBG_PRINT(verbose, "launch_emu_target(%d) RETURN\n", count);
 #endif
+
+	BAM_EMU_HOST_DBG_PRINT(BAM_EMU_DBGLVL_INFO, "launch_emu_target(%p) \n", pvEmu);
+
 	return NULL;
 }
 
@@ -1026,7 +1195,7 @@ void * launch_emu_target(void *pvEmu)
 
 
 #endif
-static void start_emulation_target(bam_host_emulator *pEmu)
+void start_emulation_target(bam_host_emulator *pEmu)
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_START_EMU);
 
@@ -1258,7 +1427,7 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	//Removing it causes segmentation fault below @pEmu->tgt.d_queue_q_mem = createDma(...)
 	//Despite explict initialization of the member of the pEmu and pEmu->tgt members
 	//Mystery, come back to it.
-	memset(pEmu, 0, sizeof(bam_host_emulator));
+	memset((void *)pEmu, 0, sizeof(bam_host_emulator));
 	
 	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator(%p) pCtrl\n", pCtrl);
 
