@@ -5,18 +5,9 @@
 
 
 
-__device__	  inline  int64_t  NS_Clock() 
-{
-	  auto							TimeSinceEpoch_ns  =  cuda::std::chrono::duration_cast<cuda::std::chrono::nanoseconds>( cuda::std::chrono::system_clock::now().time_since_epoch() );
-	  return  static_cast<int64_t>( TimeSinceEpoch_ns.count() );
-}
-__device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
-{
 
-	float gbs = (float)bytes / (float)elap_ns;
 
-	return gbs;
-}
+
 
 //no reason this can't be 64K, just need to massage some stuff
 #define BAM_EMU_MAX_QUEUES 1024
@@ -170,6 +161,8 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 /* Early Simple Loopback w/o simulated latency or transfer */
 //#define BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
 
+#define BAM_EMU_USE_DEVICE_CONSTANTS
+
 //**********************************************************************************************************
 //*** Doorbells ***
 //**********************************************************************************************************
@@ -202,6 +195,52 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 //**********************************************************************************************************
 //*** Emulator Common Structures  ***
 //**********************************************************************************************************
+
+typedef struct
+{
+	uint32_t clock_rate_khz;
+	
+} bam_emu_constants;
+
+
+#if 0//def  BAM_EMU_USE_DEVICE_CONSTANTS
+extern __constant__ bam_emu_constants g_device_EmuConstants;
+
+
+__device__	  inline  int64_t  NS_Clock2() 
+{
+	  auto							TimeSinceEpoch_ns  =  cuda::std::chrono::duration_cast<cuda::std::chrono::nanoseconds>( cuda::std::chrono::system_clock::now().time_since_epoch() );
+	  return  static_cast<int64_t>( TimeSinceEpoch_ns.count() );
+}
+__device__	  inline  int64_t  NS_Clock() 
+{
+	uint64_t cycles = clock64();
+	uint64_t ns = NS_Clock2();
+	
+	BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_ERROR, "NS_CLOCK cycles = %ld clock_khz = %d clock2 = %ld\n", cycles, g_device_EmuConstants.clock_rate_khz,NS_Clock2());
+
+	return ns;
+}
+
+
+#else
+__device__	  inline  int64_t  NS_Clock() 
+{
+	  auto							TimeSinceEpoch_ns  =  cuda::std::chrono::duration_cast<cuda::std::chrono::nanoseconds>( cuda::std::chrono::system_clock::now().time_since_epoch() );
+	  return  static_cast<int64_t>( TimeSinceEpoch_ns.count() );
+}
+#endif
+__device__ __host__ inline float get_GBs_per_sec(uint64_t elap_ns, int bytes)
+{
+
+	float gbs = (float)bytes / (float)elap_ns;
+
+	return gbs;
+}
+
+
+
+
 
 typedef union
 {
@@ -239,6 +278,7 @@ typedef struct
 #define EMU_MODEL_TYPE_LATENCY          1
 #define EMU_MODEL_TYPE_AGGREGATION      2
 #define EMU_MODEL_TYPE_VENDOR           3
+
 
 
 typedef struct 

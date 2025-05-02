@@ -338,22 +338,21 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	const int stop_recursion = STOP_RECURSION;
 
 	
-	static int counter = 0;
-
-	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) counter = %d\n", level, counter++);
+//	static int counter = 0;
+//	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) counter = %d\n", level, counter++);
 
 	
 	
-	assert(pLatModel);
-	assert(pLatContext);
-	assert(level < EMU_LATENCY_MAX_CHAINS);
+	//assert(pLatModel);
+	//assert(pLatContext);
+	//assert(level < EMU_LATENCY_MAX_CHAINS);
 	
 	if(level == pLatModel->chain_count)
 	{
 		return stop_recursion;
 	}
 
-	assert(level < pLatModel->chain_count);
+	//assert(level < pLatModel->chain_count);
 
 	if(pLatModel->nLoobackLevel)
 	{
@@ -365,8 +364,8 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	}
 	
 
-	assert(level < pLatModel->chain_count);
-	assert(level < EMU_LATENCY_MAX_CHAINS);
+	//assert(level < pLatModel->chain_count);
+	//assert(level < EMU_LATENCY_MAX_CHAINS);
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) pChain = %p\n", level, &pLatModel->latency_chain[level]);
 		
@@ -399,6 +398,7 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 		latency_adder_ns += (cur_jitter);
 	}
 
+
 	if(pChain->per_k_transfer_multiplier)
 	{
 		uint32_t xfer_factor = pLatContext->lat_context.xfer_kbytes * pChain->per_k_transfer_multiplier;
@@ -407,7 +407,6 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 
 		latency_adder_ns += xfer_factor;
 	}
-
 	
 
 	pLatContext->lat_context.done_ns += latency_adder_ns;

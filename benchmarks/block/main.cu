@@ -255,6 +255,12 @@ void random_access_kernel(Controller** ctrls, page_cache_d_t* pc,  uint32_t req_
 
 }
 
+#ifdef BAM_EMU_USE_DEVICE_CONSTANTS
+bam_emu_constants g_host_EmuConstants;
+__constant__ bam_emu_constants g_device_EmuConstants;
+#endif
+
+
 
 int main(int argc, char** argv) {
 
@@ -288,7 +294,14 @@ int main(int argc, char** argv) {
     printf("Prop: sharedMemPerMultiprocessor = %ld\n", properties.sharedMemPerMultiprocessor );
     printf("Prop: multiProcessorCount        = %d\n", properties.multiProcessorCount);
     printf("Prop: warpSize                   = %d\n", properties.warpSize);
+    printf("Prop: clockRate                  = %d\n", properties.clockRate);
 
+
+#ifdef BAM_EMU_USE_DEVICE_CONSTANTS
+	g_host_EmuConstants.clock_rate_khz = properties.clockRate;
+	cudaMemcpyToSymbol((void *)&g_device_EmuConstants, (void *)&g_host_EmuConstants, sizeof(g_host_EmuConstants));	
+
+#endif
 	
     try {
 
