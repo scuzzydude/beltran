@@ -39,8 +39,6 @@
 #include "emu_vendor.h"
 #include "emu_mapper.h"
 
-
-
 volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator *pEmu, nvm_queue_t *pQueue, int *pNeedDevicePtr)
 {
 		int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_CREATE_Q );

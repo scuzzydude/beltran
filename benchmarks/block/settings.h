@@ -24,6 +24,28 @@
 #define WRITE 1
 #define MIXED 2
 
+
+
+
+
+
+
+#define BA_LAB_INFRASTRUCTURE
+
+#ifdef BA_LAB_INFRASTRUCTURE
+#define BA_PRINTF_TGT_THID 0 
+#define BA_ENABLE_CUDA_PRINTF 1
+#define BA_CUDA_PRINT(__fmt, ...) if((BA_ENABLE_CUDA_PRINTF) && (threadIdx.x == BA_PRINTF_TGT_THID )) printf(__fmt, ##__VA_ARGS__)
+
+#else
+#define BA_CUDA_PRINT((_printf_params))
+#endif
+
+
+
+
+
+
 struct Settings
 {
     uint32_t        cudaDevice;
@@ -55,6 +77,13 @@ struct Settings
     uint64_t ratio;
     uint64_t ssdtype;
     const char*     input;
+#ifdef BA_LAB_INFRASTRUCTURE
+	const char*     user_tag;
+	uint32_t        series;
+	uint32_t        sequence;
+	
+
+#endif	
     Settings();
     void parseArguments(int argc, char** argv);
 
@@ -390,6 +419,11 @@ void Settings::parseArguments(int argc, char** argv)
         {'o', OptionPtr(new Range(accessType, 0, 3, "access_type", "type of access to make: 0->read, 1->write, 2->mixed", "0"))},
         {'s', OptionPtr(new Range(ratio, 0, 100, "ratio", "ratio split for % of mixed accesses that are read", "100"))},
         {'S', OptionPtr(new Range(ssdtype, 0, 2, "ssd", "type of SSD to use 0->Samsung, 1->Intel", "0"))},
+#ifdef BA_LAB_INFRASTRUCTURE
+        {'U', OptionPtr(new Option<const char*>(user_tag, "string", "user_tag", "Usertag"))},
+        {'E', OptionPtr(new Option<uint32_t>(series, "number", "series", "Test Series", "0"))},
+        {'Q', OptionPtr(new Option<uint32_t>(sequence, "number", "sequence", "Test Sequence", "0"))},
+#endif
     };
 
     string optionString;
@@ -487,6 +521,17 @@ Settings::Settings()
     ratio = 100;
     input = nullptr;
     ssdtype =0;
+
+#ifdef BA_LAB_INFRASTRUCTURE
+	user_tag = NULL;
+	series = 0;
+	sequence = 0;
+#endif	
+
+#ifdef BA_DEBUG_SETTINGS
+				fprintf(stderr, "BA_DEBUG_SETTINGS(1)\n");
+#endif
+	
 }
 
 
