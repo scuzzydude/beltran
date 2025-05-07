@@ -39,7 +39,7 @@ static void emu_lab_log_to_csv(char *filename, Settings *pSettings, double elaps
 		printf("bandwidth2 %f\n", bandwidth * 1000000000.0);	
 		printf("iops2 %f\n", iops);
 
-		fprintf(fout,"%s,%d,%d,%d,%d,%f,%f,%f,%d,%d,%d,%d,%d,%d\n",
+		fprintf(fout,"%s,%d,%d,%d,%d,%f,%f,%f,%ld,%ld,%ld,%ld,%ld,%ld\n",
 		pSettings->user_tag,
 		pSettings->series,
 		pSettings->sequence,

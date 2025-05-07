@@ -1185,7 +1185,7 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 
 }
 
-static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, bam_host_emulator **pEmulator, uint64_t emulationTargetFlags, uint32_t blkSize, uint32_t sectorSize)
+static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, bam_host_emulator **pEmulator, uint64_t emulationTargetFlags, uint32_t blkSize, uint32_t sectorSize, uint32_t loopback_mask)
 {
 
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_INIT_EMU);
@@ -1257,7 +1257,8 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	strcpy(pEmu->name, "BAM_EMULATOR");
 
 	pEmu->sectorSize = sectorSize;
-
+	pEmu->loopbackMask = loopback_mask;
+	
 	*pEmulator = pEmu;
 	
 	pCtrl->page_size = 4096;

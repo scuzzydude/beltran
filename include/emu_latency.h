@@ -72,6 +72,25 @@ typedef struct
 } emu_latency_chain;
 
 #define LAT_LOOPBACK_LEVEL_TOP 0xFFFFFFFF
+
+typedef struct
+{
+	uint8_t  generation;
+	uint8_t  width;
+	uint8_t  post_level;
+	uint8_t  rsvd;
+
+	uint32_t per_k_ns_mult;
+	
+
+	simt::atomic<uint64_t, simt::thread_scope_device> free_ns;
+	uint8_t pad0[24];
+		
+
+} emu_model_dma;
+
+
+
 typedef struct
 {
 	uint32_t nLoobackLevel; //null zero, so index to level is -1 
@@ -80,6 +99,8 @@ typedef struct
 	uint32_t total_channel_size;
 	uint32_t total_alloc_size;
 	uint32_t model_op_type;   //TODO: First pass model for homogenus flows, all read, all write, figure out combo and shared latency stages later
+	emu_model_dma       dma;
+
 	
 	emu_latency_chain latency_chain[EMU_LATENCY_MAX_CHAINS];
 
@@ -96,18 +117,20 @@ typedef struct
 /* Just have one model for reads, later we will have model for reads and writes seperately */
 emu_latency_model simple_generic =
 {
-	LAT_LOOPBACK_LEVEL_TOP, //0, //loopback
+	0,//LAT_LOOPBACK_LEVEL_TOP, //0, //loopback
 	5, //chain_count
 	0, //channel_offset - dynamically filled in
 	0, //total_channel_size - dyanmically filled in
 	0, //total_alloc_size - dynmaically_filled in
-	SN_OP_READ, 
-	{
-		{0, 1,  100,   0, 0, "L2P_DDR",       NULL}, //0
-		{0, 16, 30000, 0, 0, "TREAD_NAND",    NULL}, //1
-		{0, 1,  500,   0, 1, "TRANSFER_NAND", NULL}, //2
-		{0, 1,  200,   0, 1, "DECODE_NAND",   NULL}, //3
-		{0, 1,  200,   10, 1, "FLUSH",         NULL}, //4
+	SN_OP_READ, //model_op_type
+	{ 4, 16, 4 }, //dma
+	{   
+		//bLoopback,  channels, latency_ns, jitter,  per_k_xfmult,         mnenomic,     pChannels
+		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
+		{         0,        16,      30000,      0,             0,     "TREAD_NAND",          NULL}, //1
+		{         0,         1,        500,      0,             1,  "TRANSFER_NAND",          NULL}, //2
+		{         0,         1,        200,      0,             1,    "DECODE_NAND",          NULL}, //3
+		{         0,         1,        200,     10,             1,          "FLUSH",          NULL}, //4
 			
 
 	}
@@ -159,6 +182,21 @@ uint32_t emu_model_latency_private_init(bam_host_emulator *pEmu, bam_emu_target_
 	emu_latency_channel *pChan;
 	uint32_t i;
 
+	const uint32_t pcie_ns_per_k[8] =
+		{
+			0,	  //0
+			4096, //1	
+			2048, //2
+			1039, //3
+			520,  //4,
+			260,  //5,
+			135,  //6
+			67,   //7
+	
+		};
+	
+
+
 	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_latency_private_init() size = %d total_channel_size = %d\n", size, total_channel_size);
 
 
@@ -172,12 +210,26 @@ uint32_t emu_model_latency_private_init(bam_host_emulator *pEmu, bam_emu_target_
 
 	pLatModel = (emu_latency_model *)pModel->pvHostPrivate;
 
+	pLatModel->nLoobackLevel = pEmu->loopbackMask;
+
+	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_latency_private_init() LoopbackLevel = 0x%08x\n", pLatModel->nLoobackLevel);
+
 	pLatModel->channel_offset = sizeof(emu_latency_model);
 	pLatModel->total_channel_size = total_channel_size;
 	pLatModel->total_alloc_size = size;
 
+	if((pLatModel->dma.generation != 0) &&
+		(pLatModel->dma.generation < 8) && 
+		(pLatModel->dma.width != 0 ) &&
+		(pLatModel->dma.width <= 16))
+		
+	{
+		pLatModel->dma.per_k_ns_mult = (pcie_ns_per_k[pLatModel->dma.generation] / pLatModel->dma.width);
+	}
 	
+	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_latency_private_init() LatModel per_k_ns_mult = %d\n", pLatModel->dma.per_k_ns_mult);
 
+		
 	pChan = (emu_latency_channel *)((char *)pModel->pvDevPrivate + sizeof(emu_latency_model));
 	
 	for(i = 0; i < pWorkingModel->chain_count; i++)
@@ -267,6 +319,7 @@ __device__ inline void emu_model_latency_enqueue(latency_context **ppLatListHead
 			}
 
 		}
+		
 
 	}
 
@@ -316,17 +369,13 @@ __device__ inline int emu_mode_find_channel(emu_latency_chain *pChain, uint64_t 
 __device__ inline void emu_model_update_channel_done_ns(emu_latency_chain *pChain, int channel, uint64_t channel_done_ns)
 {
 	pChain->pChannels[channel].time_free_ns.store(channel_done_ns, simt::memory_order_release);
+	
 }
 
 
 
-#define NO_RECURSION
-#ifdef NO_RECURSION
 #define STOP_RECURSION 1
 #define CONTINUE_RECURSION 0
-#else
-#define STOP_RECURSION 0
-#endif
 
 __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, latency_context *pLatContext, uint32_t level)
 {
@@ -335,7 +384,6 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	emu_latency_chain *pChain;
 	uint64_t channel_done_ns;
 	uint64_t latency_adder_ns;
-	const int stop_recursion = STOP_RECURSION;
 
 	
 //	static int counter = 0;
@@ -349,7 +397,7 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	
 	if(level == pLatModel->chain_count)
 	{
-		return stop_recursion;
+		return STOP_RECURSION;
 	}
 
 	//assert(level < pLatModel->chain_count);
@@ -358,7 +406,8 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	{
 		if((1 << level) & pLatModel->nLoobackLevel)
 		{
-			return stop_recursion;
+			BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) LOOPBACK_LEVEL = 0x%08x\n", level, pLatModel->nLoobackLevel);
+			return STOP_RECURSION;
 		}
 
 	}
@@ -414,11 +463,41 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	emu_model_update_channel_done_ns(pChain, channel, pLatContext->lat_context.done_ns);
 
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_recurse(%d) latency_adder_ns = %ld channel = %d context.done_ns = %ld\n", level, latency_adder_ns, channel, pLatContext->lat_context.done_ns);
-#ifdef NO_RECURSION
+
 	return CONTINUE_RECURSION;
-#else
-	return emu_model_latency_recurse(pLatModel, pLatContext, level + 1);
-#endif
+}
+
+
+__device__ inline void emu_model_latency_emulate_transfer(emu_latency_model *pLatModel, latency_context *pLatContext )
+{
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
+	uint64_t free_ns;
+	uint64_t add_ns;
+	uint64_t channel_done_ns;
+		
+
+	free_ns = pLatModel->dma.free_ns.load(simt::memory_order_acquire);
+	add_ns = pLatContext->lat_context.xfer_kbytes * pLatModel->dma.per_k_ns_mult;
+	
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_model_latency_emulate_transfer(%p, %p, free_ns = %ld, add_ns = %ld)\n", pLatModel, pLatContext, free_ns, add_ns);
+
+
+	if((free_ns == 0) || (free_ns <= pLatContext->lat_context.done_ns))
+	{
+		channel_done_ns = pLatContext->lat_context.done_ns + add_ns;	
+	}
+	else
+	{
+		channel_done_ns = free_ns + add_ns;
+	}
+
+	pLatContext->lat_context.done_ns = channel_done_ns;
+
+	pLatModel->dma.free_ns.store(channel_done_ns, simt::memory_order_release);
+	
+	//TODO: Actually transfer the data 
+
+
 }
 
 
@@ -476,18 +555,27 @@ __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, sto
 			if(SN_OP_READ == pLatModel->model_op_type)
 			{
 	
-#ifdef NO_RECURSION
 				uint32_t i;
-
+				uint32_t signal;
+				
 				
 				for(i = 0; i < EMU_LATENCY_MAX_CHAINS; i++)
 				{
-					if(STOP_RECURSION == emu_model_latency_recurse(pLatModel, pLatContext, i))
+
+					signal = emu_model_latency_recurse(pLatModel, pLatContext, i);
+
+					if(pLatModel->dma.post_level == i)
+					{
+						emu_model_latency_emulate_transfer(pLatModel, pLatContext);
+					}
+
+					if(STOP_RECURSION == signal)
 					{
 						break;
 					}
 
 				}
+				
 				if(LAT_STAT_GOOD == pLatContext->lat_context.lat_error)
 				{
 					emu_model_latency_enqueue(pLatListHead, pLatContext);
@@ -496,19 +584,6 @@ __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, sto
 				{
 					BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "LAT:CALL emu_model_latency_recurse() CALL(SN_OP_READ) ERROR %d\n", pLatContext->lat_context.lat_error);
 				}
-#else
-			
-				if(emu_model_latency_recurse(pLatModel, pLatContext, 0))
-				{
-					BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "LAT:CALL emu_model_latency_recurse() CALL(SN_OP_READ) ERROR %d\n", 0);
-				}
-				else
-				{
-					BAM_EMU_DEV_DBG_PRINT1(verbose, "LAT:emu_model_latency_recurse() DONE(SN_OP_READ) total_latency = %ld (ns)\n", pLatContext->lat_context.done_ns - pLatContext->lat_context.start_ns);
-					emu_model_latency_enqueue(pLatListHead, pLatContext);
-				}
-
-#endif
 
 			}
 			else

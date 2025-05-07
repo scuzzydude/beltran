@@ -340,7 +340,7 @@ int main(int argc, char** argv) {
         for (size_t i = 0 ; i < settings.n_ctrls; i++)
 	{
 #ifdef BAM_EMU_COMPILE            
-            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  BAM_EMU_TARGET_ENABLE, settings.blkSize, settings.pageSize);
+            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  BAM_EMU_TARGET_ENABLE, settings.blkSize, settings.pageSize, settings.loopback);
 #else
             ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues);
 #endif
@@ -540,7 +540,7 @@ int main(int argc, char** argv) {
 #ifdef BA_LAB_INFRASTRUCTURE
 
 		printf("bandwidth1 %f\n", bandwidth);	
-		printf("iops1 %f\n", iops);
+		printf("MIOPS %f\n", iops / 1000000.0);
 		
 		emu_lab_log_to_csv(BA_LAB_LOGFILENAME, &settings, elapsed, iops, bandwidth, ios, data);
 #endif

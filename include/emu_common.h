@@ -433,6 +433,7 @@ typedef struct
 	pthread_t          	  emu_threads[3];
 	int                   bRun;
 	uint32_t              sectorSize;
+	uint32_t              loopbackMask;
 	
 	
 } bam_host_emulator;

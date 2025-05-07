@@ -81,7 +81,7 @@ struct Settings
 	const char*     user_tag;
 	uint32_t        series;
 	uint32_t        sequence;
-	
+	uint32_t        loopback;
 
 #endif	
     Settings();
@@ -423,6 +423,7 @@ void Settings::parseArguments(int argc, char** argv)
         {'U', OptionPtr(new Option<const char*>(user_tag, "string", "user_tag", "Usertag"))},
         {'E', OptionPtr(new Option<uint32_t>(series, "number", "series", "Test Series", "0"))},
         {'Q', OptionPtr(new Option<uint32_t>(sequence, "number", "sequence", "Test Sequence", "0"))},
+        {'L', OptionPtr(new Option<uint32_t>(loopback, "number", "loopback_mask", "EMU Loopback Mask", "0"))},
 #endif
     };
 

@@ -76,7 +76,7 @@ struct Controller
     Controller(uint64_t controllerId, uint32_t nvmNamespace, uint32_t adapter, uint32_t segmentId);
 #endif
 
-    Controller(const char* path, uint32_t nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget = BAM_EMU_TARGET_DISABLE, uint32_t blkSize = 0, uint32_t sectorSize = 0);
+    Controller(const char* path, uint32_t nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget = BAM_EMU_TARGET_DISABLE, uint32_t blkSize = 0, uint32_t sectorSize = 0, uint32_t loopbackMask = 0);
 
     void reserveQueues();
 
@@ -157,7 +157,7 @@ Controller::Controller(uint64_t ctrl_id, uint32_t ns_id, uint32_t)
 
 
 
-inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget, uint32_t blkSize, uint32_t sectorSize)
+inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, uint64_t  emulationTarget, uint32_t blkSize, uint32_t sectorSize, uint32_t loopbackMask)
     : ctrl(nullptr)
     , aq_ref(nullptr)
     , deviceId(cudaDevice)
@@ -168,7 +168,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 	if(emulationTarget & BAM_EMU_TARGET_ENABLE)
 	{
 		emulationTargetFlags = emulationTarget;
-		ctrl = initializeEmulator(ns_id, cudaDevice, queueDepth, numQueues, &pEmu, emulationTarget, blkSize, sectorSize);
+		ctrl = initializeEmulator(ns_id, cudaDevice, queueDepth, numQueues, &pEmu, emulationTarget, blkSize, sectorSize, loopbackMask);
 
 		printf("Controller Init :BAM_EMU_TARGET_ENABLE pEmu = %p ctrl = %p numQueues = %ld\n", pEmu, ctrl, numQueues);
 
