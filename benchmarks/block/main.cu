@@ -367,9 +367,6 @@ int main(int argc, char** argv) {
 #ifdef BAM_EMU_COMPILE  
 #ifdef  BAM_RUN_EMU_IN_BAM_KERNEL
 
-//		ctrls[0]->pDevTgt_control->numEmuThreads = b_size;
-//		ctrls[0]->pDevTgt_control->numEmuThreads = b_size * 8;
-		ctrls[0]->pDevTgt_control->numEmuThreads = settings.numQueues;
 
 		g_size = (settings.numThreads + ctrls[0]->pDevTgt_control->numEmuThreads + b_size - 1)/b_size;
 #endif
@@ -509,13 +506,15 @@ int main(int argc, char** argv) {
 #endif
 #endif
 
-        //print_cache_kernel<<<1,1>>>(d_pc);
-        //new_kernel<<<1,1>>>();
-        //uint8_t* ret_array = (uint8_t*) malloc(n_pages*page_size);
 
-        //cuda_err_chk(cudaMemcpy(ret_array, h_pc.base_addr,page_size*n_pages, cudaMemcpyDeviceToHost));
 #if 1
+		cudaError_t err = cudaGetLastError();
+		if (err != cudaSuccess) {
+			printf("CUDA error: %s\n", cudaGetErrorString(err));
+		}
         cuda_err_chk(cudaDeviceSynchronize());
+
+
 #else
 	
 #endif	
@@ -538,11 +537,10 @@ int main(int argc, char** argv) {
 
 
 #ifdef BA_LAB_INFRASTRUCTURE
-
-		printf("bandwidth1 %f\n", bandwidth);	
-		printf("MIOPS %f\n", iops / 1000000.0);
-		
 		emu_lab_log_to_csv(BA_LAB_LOGFILENAME, &settings, elapsed, iops, bandwidth, ios, data);
+#endif
+#ifdef BAM_EMU_COMPILE 
+		emu_stats_dump(ctrls[0]->pDevTgt_control, true, true, true);
 #endif
 
         //std::cout << std::dec << ctrls[0]->ns.lba_data_size << std::endl;

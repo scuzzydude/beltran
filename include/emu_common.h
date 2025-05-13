@@ -3,6 +3,7 @@
 
 
 
+#include "emu_stats.h"
 
 
 
@@ -57,6 +58,7 @@
 #define BAM_DBG_CODE_PATH_H_LAT_PSIZE     0x100
 #define BAM_DBG_CODE_PATH_H_INIT_AGG      0x200
 #define BAM_DBG_CODE_PATH_H_INIT_VENDOR   0x400
+#define BAM_DBG_CODE_PATH_H_STATS_DUMP    0x800
 
 
 
@@ -388,6 +390,7 @@ typedef struct
 
 	bam_emu_mapper                 *pDevMapper;  //device copy
 
+	emu_stats                      *pStats;
 		
 } bam_emulated_target_control;
 	

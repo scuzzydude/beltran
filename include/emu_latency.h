@@ -114,6 +114,8 @@ typedef struct
 //up_next gives error if initailized with 0 or NULL and both up_next and pad are compile time
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers" 
 
+
+#if 1 //superbasic
 /* Just have one model for reads, later we will have model for reads and writes seperately */
 emu_latency_model simple_generic =
 {
@@ -127,7 +129,33 @@ emu_latency_model simple_generic =
 	{   
 		//bLoopback,  channels, latency_ns, jitter,  per_k_xfmult,         mnenomic,     pChannels
 		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
-		{         0,        16,      30000,      0,             0,     "TREAD_NAND",          NULL}, //1
+		{         0,         1,        1000,      0,             0,     "TREAD_NAND",          NULL}, //1
+		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
+		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
+		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
+			
+
+	}
+
+};
+
+
+#else
+/* Just have one model for reads, later we will have model for reads and writes seperately */
+emu_latency_model simple_generic =
+{
+	0,//LAT_LOOPBACK_LEVEL_TOP, //0, //loopback
+	5, //chain_count
+	0, //channel_offset - dynamically filled in
+	0, //total_channel_size - dyanmically filled in
+	0, //total_alloc_size - dynmaically_filled in
+	SN_OP_READ, //model_op_type
+	{ 4, 16, 4 }, //dma
+	{   
+		//bLoopback,  channels, latency_ns, jitter,  per_k_xfmult,         mnenomic,     pChannels
+		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
+//		{         0,        16,      30000,      0,             0,     "TREAD_NAND",          NULL}, //1
+		{         0,         1,      30000,      0,             0,     "TREAD_NAND",          NULL}, //1
 		{         0,         1,        500,      0,             1,  "TRANSFER_NAND",          NULL}, //2
 		{         0,         1,        200,      0,             1,    "DECODE_NAND",          NULL}, //3
 		{         0,         1,        200,     10,             1,          "FLUSH",          NULL}, //4
@@ -137,6 +165,7 @@ emu_latency_model simple_generic =
 
 };
 
+#endif
 
 #pragma GCC diagnostic pop
 
@@ -289,6 +318,7 @@ __device__ inline void emu_model_latency_enqueue(latency_context **ppLatListHead
 	latency_context *pTemp = *ppLatListHead;
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_enqueue() pTemp = %p ppLatListHead = %p pLatContext = %p  done_ns = %ld\n", pTemp, ppLatListHead, pLatContext, pLatContext->lat_context.done_ns);
+	pLatContext->lat_context.pNext = NULL;
 	
 	if(NULL == pTemp)
 	{
@@ -312,6 +342,8 @@ __device__ inline void emu_model_latency_enqueue(latency_context **ppLatListHead
 			}
 			else
 			{
+
+				BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_ERROR, "LAT:emu_model_latency_enqueue() OUT OF ORDER!!! pTemp = %p pTemp.done_ns  %ld\n", pTemp, pTemp->lat_context.done_ns);
 				//this shouldn't happen with loopback, but could wiht multi channels latency + jitter when 
 				//one IO lucks into a shorter path;
 				//deal with later
@@ -625,6 +657,7 @@ __device__ inline storage_next_emuluator_context * emu_model_latency_cull(bam_em
 			*ppLatListHead = (*ppLatListHead)->lat_context.pNext;
 			return pTemp;
 		}
+		
 	}
 
 

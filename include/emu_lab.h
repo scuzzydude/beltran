@@ -5,12 +5,6 @@
 
 #define BA_LAB_LOGFILENAME "bam_block.csv"
 
-static bool ACp_file_exists (char *filename) 
-{
-  	struct stat   buffer;   
-  	return (stat (filename, &buffer) == 0);
-}
-
 
 static void emu_lab_log_to_csv(char *filename, Settings *pSettings, double elapsed, double iops, double bandwidth, uint64_t ios, uint64_t total_data_bytes)
 {	

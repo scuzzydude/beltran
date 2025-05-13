@@ -39,6 +39,14 @@
 #include "emu_vendor.h"
 #include "emu_mapper.h"
 
+
+
+static bool ACp_file_exists (char *filename) 
+{
+  	struct stat   buffer;   
+  	return (stat (filename, &buffer) == 0);
+}
+
 volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator *pEmu, nvm_queue_t *pQueue, int *pNeedDevicePtr)
 {
 		int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_CREATE_Q );
@@ -361,6 +369,7 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_EXE);
 
+	EMU_STATS_BASIC_INC(pMgtTgtControl, BasicStatRequest);
 	
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_NVMe_execute(%ld) call emu_tgt_map_Submit(%p, %p)\n", tid, pMgtTgtControl->pDevMapper, pContext);
 
@@ -404,8 +413,11 @@ __device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pCon
 
 	if (0 == pQP->cQ.tail)
 	{
-				pQP->cQ.rollover++;
+		pQP->cQ.rollover++;
 	}
+
+	EMU_STATS_BASIC_INC(pMgtTgtControl, BasicStatResponse);
+		
 
 	return 0;
 	
@@ -455,6 +467,8 @@ __device__ inline uint32_t emu_tgt_Cull(bam_emulated_target_control    *pMgtTgtC
 		}
 		else
 		{
+			
+			EMU_STATS_BASIC_INC(pMgtTgtControl, BasicStatCullStall);
 			break;
 		}
 	}
@@ -1185,6 +1199,129 @@ static inline void cleanup_emulator_target(bam_host_emulator *pEmu)
 
 }
 
+static void emu_stats_init(bam_emulated_target_control      *pTgt_control)
+{
+	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_INIT_EMU);
+#if (EMU_STATS_LEVEL != EMU_STATS_LVL_NONE)
+
+	int size_needed = pTgt_control->numEmuThreads * sizeof(emu_stats);
+
+	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_stats_init(%p) EMU_STATS_LEVEL = %d numEmuThreads = %d size_needed = %d\n", pTgt_control, EMU_STATS_LEVEL, pTgt_control->numEmuThreads, size_needed);
+
+	cuda_err_chk(cudaMalloc(&pTgt_control->pStats, size_needed));
+	
+	cuda_err_chk(cudaMemset(pTgt_control->pStats, 0, size_needed));
+
+#else
+	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_stats_init() STATS NOT ENABLED (%d)\n", EMU_STATS_LEVEL);
+#endif
+
+
+
+}
+
+static int emu_stats_dump(bam_emulated_target_control *pMgtTgtControl, bool bAppend, bool bSummary, bool bTBD)
+{
+	
+	
+#if (EMU_STATS_LEVEL != EMU_STATS_LVL_NONE)
+	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_STATS_DUMP);
+	int size_needed = pMgtTgtControl->numEmuThreads * sizeof(emu_stats);
+	emu_stats *pLocalStats, *pTxStats;
+
+	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_stats_dump() size_neeeded = %d\n", size_needed);
+
+	pLocalStats = (emu_stats *)malloc(size_needed);
+	
+	if(pLocalStats)
+	{
+		int i, j;
+		const char *filename = "basic_stats.csv";
+		bool bHeader = true;
+		FILE *fout;
+		BAM_EMU_HOST_DBG_PRINT(verbose, "emu_stats_dump() pLocalStats = %p\n", pLocalStats);
+	
+		cuda_err_chk(cudaMemcpy(pLocalStats, pMgtTgtControl->pStats, size_needed, cudaMemcpyDeviceToHost));
+		uint64_t *pBasic;
+
+		if(0)//if(ACp_file_exists((char *)filename ))
+		{
+			fout = fopen(filename , "a");
+			bHeader = 0;
+		}
+		else
+		{
+			fout = fopen(filename , "w");
+			bHeader = 1;
+		}
+
+		if(fout)
+		{
+			pBasic = (uint64_t *)malloc(sizeof(uint64_t) * BasicStatMaxEnum);
+
+			BAM_EMU_HOST_ASSERT(pBasic);
+
+			memset(pBasic, 0, sizeof(uint64_t) * BasicStatMaxEnum);
+			
+			if(bHeader)
+			{
+			//fprintf(fout, "USER_TAG,series,sequence,access,operation,Elaps,iops,bps,QDepth,IoSize,BAM_Requests,BAM_QDepth,BAM_Pages,BAM_Cuda_BlkSize\n");
+
+				fprintf(fout, "ThreadIdx");
+				for(i = 0; i < BasicStatMaxEnum; i++)
+				{
+					fprintf(fout, ",%s", EmuBasicStatStr(i));
+				}
+				fprintf(fout, "\n");
+
+			}	
+			
+
+			for(i = 0; i < pMgtTgtControl->numEmuThreads; i++)
+			{
+				fprintf(fout, "%d", i);
+				pTxStats = &pLocalStats[i];
+				for(j = 0; j < BasicStatMaxEnum; j++)
+				{
+
+					fprintf(fout, ",%ld", pTxStats->basic[j]);
+					pBasic[j] += pTxStats->basic[j];
+				}
+				fprintf(fout, "\n");
+
+			}
+
+			fprintf(fout, "Total");
+			for(j = 0; j < BasicStatMaxEnum; j++)
+			{
+				fprintf(fout, ",%ld", pBasic[j]);
+			}
+			fprintf(fout, "\n");
+
+
+			free(pBasic);
+
+
+			fclose(fout);
+		}
+		
+
+
+
+
+
+		free(pLocalStats);
+	}
+
+#endif
+	return 0;
+}
+
+
+
+
+
+
 static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues, bam_host_emulator **pEmulator, uint64_t emulationTargetFlags, uint32_t blkSize, uint32_t sectorSize, uint32_t loopback_mask)
 {
 
@@ -1309,7 +1446,11 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	pEmu->tgt.pTgt_control->numQueues = 0;
 	pEmu->tgt.pTgt_control->bRun = 1;
 	pEmu->tgt.pTgt_control->bDone = 0;
-		
+
+	pEmu->tgt.pTgt_control->numEmuThreads = numQueues;
+
+	emu_stats_init(pEmu->tgt.pTgt_control);
+	
 
 	strcpy(pEmu->tgt.pTgt_control->szName, "george");
 
