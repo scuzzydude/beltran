@@ -129,7 +129,7 @@ emu_latency_model simple_generic =
 	{   
 		//bLoopback,  channels, latency_ns, jitter,  per_k_xfmult,         mnenomic,     pChannels
 		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
-		{         0,         1,        1000,      0,             0,     "TREAD_NAND",          NULL}, //1
+		{         0,         1,        100000,      0,             0,     "TREAD_NAND",          NULL}, //1
 		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
 		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
 		{         0,         1,        100,      0,             0,        "L2P_DDR",          NULL}, //0
@@ -315,9 +315,15 @@ __device__ inline void emu_model_latency_enqueue(latency_context **ppLatListHead
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
 
+	BAM_EMU_DEVICE_ASSERT_DBG(ppLatListHead);
+
 	latency_context *pTemp = *ppLatListHead;
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pLatContext);
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_enqueue() pTemp = %p ppLatListHead = %p pLatContext = %p  done_ns = %ld\n", pTemp, ppLatListHead, pLatContext, pLatContext->lat_context.done_ns);
+
+
 	pLatContext->lat_context.pNext = NULL;
 	
 	if(NULL == pTemp)
@@ -347,7 +353,8 @@ __device__ inline void emu_model_latency_enqueue(latency_context **ppLatListHead
 				//this shouldn't happen with loopback, but could wiht multi channels latency + jitter when 
 				//one IO lucks into a shorter path;
 				//deal with later
-				assert(0);
+				BAM_EMU_DEVICE_ASSERT(0);
+	
 			}
 
 		}
@@ -365,6 +372,9 @@ __device__ inline int emu_mode_find_channel(emu_latency_chain *pChain, uint64_t 
 	int channel = -1;
 	uint32_t cht;
 
+	BAM_EMU_DEVICE_ASSERT_DBG(pChain);
+	BAM_EMU_DEVICE_ASSERT_DBG(pChDoneNs);
+
 	if(1 == pChain->channels)
 	{
 		channel = 0;
@@ -378,6 +388,9 @@ __device__ inline int emu_mode_find_channel(emu_latency_chain *pChain, uint64_t 
 		BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_mode_find_channel(%p) cht = %d total_channels = %d channel = %d \n", pChain, cht, pChain->channels, channel);
 
 	}
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pChain->pChannels);
+
 	
 	*pChDoneNs = pChain->pChannels[channel].time_free_ns.load(simt::memory_order_acquire);
 		
@@ -423,16 +436,18 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 
 	
 	
-	//assert(pLatModel);
-	//assert(pLatContext);
-	//assert(level < EMU_LATENCY_MAX_CHAINS);
+	BAM_EMU_DEVICE_ASSERT_DBG(pLatContext);
+	BAM_EMU_DEVICE_ASSERT_DBG(pLatModel);
+	BAM_EMU_DEVICE_ASSERT_DBG(level < EMU_LATENCY_MAX_CHAINS);
+
 	
 	if(level == pLatModel->chain_count)
 	{
 		return STOP_RECURSION;
 	}
 
-	//assert(level < pLatModel->chain_count);
+
+	BAM_EMU_DEVICE_ASSERT_DBG(level < pLatModel->chain_count);
 
 	if(pLatModel->nLoobackLevel)
 	{
@@ -445,12 +460,12 @@ __device__ inline int emu_model_latency_recurse(emu_latency_model *pLatModel, la
 	}
 	
 
-	//assert(level < pLatModel->chain_count);
-	//assert(level < EMU_LATENCY_MAX_CHAINS);
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) pChain = %p\n", level, &pLatModel->latency_chain[level]);
 		
 	pChain = &pLatModel->latency_chain[level];
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pChain);
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_recurse(%d) CALL emu_mode_find_channel pChain = %p\n", level, pChain);
 
@@ -538,7 +553,18 @@ __device__ inline int emu_model_latency_submit(bam_emu_target_model *pModel, sto
 	latency_context **pLatListHead = (latency_context **) ppvThreadContext;
 	latency_context *pLatContext = (latency_context *)pContext;
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pContext);
+	BAM_EMU_DEVICE_ASSERT_DBG(pModel);
+	BAM_EMU_DEVICE_ASSERT_DBG(ppvThreadContext);
+
+
+
 	emu_latency_model *pLatModel = (emu_latency_model *)pModel->pvDevPrivate;
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pLatModel);
+
+
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "LAT:emu_model_latency_submit() pModel = %p pContext = %p pLatListHead = %p op = %x\n", pModel, pContext, pLatListHead, SN_CONTEXT_OP(pContext));
 
@@ -642,6 +668,11 @@ __device__ inline storage_next_emuluator_context * emu_model_latency_cull(bam_em
 	latency_context **ppLatListHead = (latency_context **) ppvThreadContext;
 	storage_next_emuluator_context *pTemp;
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pModel);
+	BAM_EMU_DEVICE_ASSERT_DBG(ppvThreadContext);
+
+
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_cull(%p, %p)\n", pModel, *ppLatListHead);
 	
 

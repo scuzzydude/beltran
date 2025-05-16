@@ -166,6 +166,10 @@ __device__ inline int emu_tgt_map_Submit(bam_emu_mapper *pDevMapper, storage_nex
 
 __device__ inline storage_next_emuluator_context * emu_tgt_model_Cull(bam_emu_mapper *pDevMapper, void ** ppvThreadContext)
 {
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pDevMapper);
+	BAM_EMU_DEVICE_ASSERT_DBG(ppvThreadContext);
+
 	switch(pDevMapper->model.uModelType)
 	{
 
@@ -191,6 +195,8 @@ __device__ inline storage_next_emuluator_context * emu_tgt_model_Cull(bam_emu_ma
 
 __device__ inline storage_next_emuluator_context * emu_tgt_map_Cull(bam_emu_mapper *pDevMapper, void ** ppvThreadContext)
 {
+	BAM_EMU_DEVICE_ASSERT_DBG(pDevMapper);
+	BAM_EMU_DEVICE_ASSERT_DBG(ppvThreadContext);
 
 	switch(pDevMapper->uMapType)
 	{

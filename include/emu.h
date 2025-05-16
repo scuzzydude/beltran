@@ -351,8 +351,13 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 	uint8_t opcode;
 	uint64_t   lba;
 	int err;
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
+	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
+
 	nvm_cmd_t *pCmd = (nvm_cmd_t *)pContext->pCmd;
 
+	BAM_EMU_DEVICE_ASSERT_DBG(pCmd);
 	
 	cid = pCmd->dword[0] >> 16;
 	opcode = pCmd->dword[0] & 0x7f;
@@ -368,6 +373,11 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 {
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_EXE);
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
+	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
+	BAM_EMU_DEVICE_ASSERT_DBG(pContext);
+
 
 	EMU_STATS_BASIC_INC(pMgtTgtControl, BasicStatRequest);
 	
@@ -449,11 +459,19 @@ __device__ inline uint32_t emu_tgt_Cull(bam_emulated_target_control    *pMgtTgtC
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_CULL);
 	uint32_t count = 0;
 	storage_next_emuluator_context *pContext;
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
+	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
+
+
 	
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_Cull() pMgtTgtControl = %p pvThreadContext = %p\n", pMgtTgtControl, pQP->pvThreadContext);
 
 	while(emu_CQ_Ready(pQP, cq_db_head))
 	{
+		BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl->pDevMapper);
+		
+
 		pContext = emu_tgt_map_Cull(pMgtTgtControl->pDevMapper, &pQP->pvThreadContext);
 
 		if(pContext)
@@ -486,6 +504,10 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 	int count = 0;
 	uint32_t cq_db_head;
 	storage_next_emuluator_context *pContext;
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
+	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
+	BAM_EMU_DEVICE_ASSERT_DBG(pSubmit_count);
 
 //	cq_db_head = *pQP->cQ.db;
 
@@ -548,6 +570,11 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_SQ_CHECK);
 	uint32_t db_tail;
 	nvm_cmd_t* pCmd;
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
+	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
+	
+	
 	int q_number = pQP->q_number;
 	
 	BAM_EMU_DEV_DBG_PRINT1(verbose, "TGT: emu_tgt_SQ_Check(%p) \n", pQP);
@@ -703,12 +730,16 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	pRegQp = NULL;
 #endif
 
+	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
+	BAM_EMU_DEVICE_ASSERT_DBG(pDevQPairs);
+
 	pQP = emu_tgt_init_QueuePair(pMgtTgtControl, pDevQPairs, pRegQp, &queues_per_thread, &base_q_idx);
 
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: kernel_Emulator ENTER pMgtTgtControl = %p pQP = %p tid=%ld\n", pMgtTgtControl, pQP, tid);
 
 	BA_DBG_SET(pMgtTgtControl, 1, 0xBABA0001);
 	
+		
 
 
 	while(pMgtTgtControl->bRun)

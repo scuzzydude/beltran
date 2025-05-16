@@ -36,6 +36,17 @@
 	printf("\n\n***** EXIT(0) ***"); \
 	exit(0); } while(0)
 
+#define BAM_EMU_DEVICE_ASSERT(__assert) if(!(__assert))do { \
+	printf("BAM_EMU_DEVICE_ASSERT @LINE=%d in %s\n", __LINE__, __FILE__); 	\
+	printf("\n\n***** EXIT(0) ***"); \
+	assert(0);\
+	} while(0)
+
+
+#define BAM_EMU_DEVICE_DBG_ASSERT_ENABLE 1  
+#define BAM_EMU_DEVICE_ASSERT_DBG(__assert) if(BAM_EMU_DEVICE_DBG_ASSERT_ENABLE) BAM_EMU_DEVICE_ASSERT(__assert)
+
+
 
 #define BAM_EMU_DBGLVL_NONE    0
 #define BAM_EMU_DBGLVL_IOPATH  1
