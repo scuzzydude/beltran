@@ -209,8 +209,9 @@ struct QueuePair
 
         // Get a valid device pointer for CQ doorbell
         void* devicePtr = nullptr;
-	//	printf("QP(%d) CQ post mm_ptr = %p db = %p DIF  = %p\n", qp_id, ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr));
 
+		
+//		printf("QP(%d) CQ post mm_ptr = %p db = %p DIF  = %p\n", qp_id, ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr));
 
 		this->cq.db = emu_host_get_db_pointer((qp_id - 1), 1, pEmu, &this->cq, &need_device_ptr);
 
@@ -223,7 +224,9 @@ struct QueuePair
         	}
         	this->cq.db = (volatile uint32_t*) devicePtr;
 		}
-		//printf("DEVICE cq.db = %p\n", this->cq.db);
+
+
+//		printf("DEVICE cq.db = %p\n", this->cq.db);
 		
 			
 
@@ -251,6 +254,7 @@ struct QueuePair
         	}
         	this->sq.db = (volatile uint32_t*) devicePtr;
 		}
+
         //std::cout << "Finish Making Queue\n";
 
         init_gpu_specific_struct(cudaDevice);

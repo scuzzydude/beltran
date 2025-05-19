@@ -152,7 +152,7 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 //**********************************************************************************************************
 
 //controls emulation compile and benchmark enablement
-#define BAM_EMU_COMPILE 
+//#define BAM_EMU_COMPILE 
 
 //runs emalator from kernel threads launched by applicaiton (block benchmark only for now)
 #define BAM_RUN_EMU_IN_BAM_KERNEL

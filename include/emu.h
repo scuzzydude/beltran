@@ -55,6 +55,9 @@ volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator 
 
 		*pNeedDevicePtr = 1;
 
+#ifndef BAM_EMU_COMPILE 
+		return pQueue->db;
+#else
 #if(BAM_EMU_DOORBELL_TYPE == EMU_DB_MEM_ATOMIC_MANAGED) 
 		*pNeedDevicePtr = 0;
 		return ((0 != cq) ? (uint32_t *)&pEmu->tgt.pTgt_control->atomic_doorbells[qidx].cq_db : (uint32_t *)&pEmu->tgt.pTgt_control->atomic_doorbells[qidx].sq_db);
@@ -65,7 +68,7 @@ volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator 
 		//pEmu will be NULL if normal BaM compile or if File mapped, no redirection neccessary
 		return pQueue->db;
 #endif	
-
+#endif
 
 
 }
@@ -98,6 +101,13 @@ __device__ void emu_tgt_DMA(void *dst_addr, void *src_addr, int copy_size, int d
 
 	emu_copy_type *pSrc = (emu_copy_type *)src_addr;
 	emu_copy_type *pDst = (emu_copy_type *)dst_addr;
+
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pSrc);
+	BAM_EMU_DEVICE_ASSERT_DBG(pDst);
+	
+
+	
 	int limit = copy_size / sizeof(emu_copy_type);
 	int remainder = copy_size % sizeof(emu_copy_type);
 	if(remainder & 0x3)
@@ -219,6 +229,11 @@ __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtCont
 	void *dst_addr;
 	void *src_addr;
 	int copy_size;
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
+	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
+	
+
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_CQ_Drain() CALL cq_db_head = %d cq_tail = %d\n", cq_db_head, pQP->cQ.tail);
 
