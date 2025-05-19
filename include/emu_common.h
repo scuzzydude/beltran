@@ -29,8 +29,13 @@
 
 
 
-#define BAM_EMU_TARGET_DISABLE    0
-#define BAM_EMU_TARGET_ENABLE     0x00000001
+#define BAM_EMU_TARGET_DISABLE      0
+#define BAM_EMU_TARGET_ENABLE       0x00000001
+#define BAM_EMU_TARGET_LATENCY      0x00000002
+#define BAM_EMU_TARGET_AGGREGATION  0x00000004
+
+
+
 #define BAM_EMU_HOST_ASSERT(__assert) if(!(__assert))do { \
 	printf("BAM_EMU_HOST_ASSERT @LINE=%d in %s\n", __LINE__, __FILE__); 	\
 	printf("\n\n***** EXIT(0) ***"); \
@@ -152,7 +157,7 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 //**********************************************************************************************************
 
 //controls emulation compile and benchmark enablement
-//#define BAM_EMU_COMPILE 
+#define BAM_EMU_COMPILE 
 
 //runs emalator from kernel threads launched by applicaiton (block benchmark only for now)
 #define BAM_RUN_EMU_IN_BAM_KERNEL

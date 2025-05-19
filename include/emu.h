@@ -1382,7 +1382,7 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	int qall_size = sizeof(bam_emulated_queue_pair) * BAM_EMU_MAX_QUEUES;
 	int mem_size = NVM_CTRL_MEM_MINSIZE * 2;
 	int map_model_size = 0;
-
+	uint32_t mapt, modelt;
 	
 
 	BAM_EMU_HOST_DBG_PRINT(verbose,"initializeEmulator() sizeof(bam_emulated_queue_pair) = %ld\n", sizeof(bam_emulated_queue_pair));
@@ -1507,11 +1507,38 @@ static inline nvm_ctrl_t* initializeEmulator(uint32_t ns_id, uint32_t cudaDevice
 	
 	pEmu->tgt.pDevQPairs = (bam_emulated_queue_pair *)pEmu->tgt.d_queue_q_mem.get()->vaddr;
 
-	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() pEmu->tgt.pDevQPairs = %p &tgt.queuePairs = %p, qall_size = %ld bam_emulated_target_control = %d \n", pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size, sizeof(bam_emulated_target_control));
+	BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() pEmu->tgt.pDevQPairs = %p &tgt.queuePairs = %p, qall_size = %ld bam_emulated_target_control = %d pEmu->emulationTargetFlags = 0x%x\n", pEmu->tgt.pDevQPairs, &pEmu->tgt.queuePairs, qall_size, sizeof(bam_emulated_target_control), pEmu->emulationTargetFlags);
+
+	mapt = EMU_MAP_TYPE_DIRECT;
+	modelt = EMU_MODEL_TYPE_LATENCY;
+	
+	if(pEmu->emulationTargetFlags & BAM_EMU_TARGET_ENABLE)
+	{
+		if(pEmu->emulationTargetFlags & BAM_EMU_TARGET_AGGREGATION)
+		{
+			modelt = EMU_MODEL_TYPE_AGGREGATION;
+			
+			BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() EMU_MODEL_TYPE_AGGREGATION emulationTargetFlags = %x\n", pEmu->emulationTargetFlags);
+		}
+		else if(pEmu->emulationTargetFlags & BAM_EMU_TARGET_AGGREGATION)
+		{
+			modelt = EMU_MODEL_TYPE_VENDOR;
+
+			BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() EMU_MODEL_TYPE_VENDOR emulationTargetFlags = %x\n", pEmu->emulationTargetFlags);
+		}
+		
+
+	}
+	else
+	{
+		BAM_EMU_HOST_DBG_PRINT(verbose, "initializeEmulator() BAM_EMU_TARGET_ENABLE not set in emulationTargetFlags = %x\n", pEmu->emulationTargetFlags);
+		BAM_EMU_HOST_ASSERT(0);
+	}
+ 	
 
 
 #ifndef BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
-	map_model_size = emulator_init_mapper(pEmu, EMU_MAP_TYPE_DIRECT, EMU_MODEL_TYPE_LATENCY);
+	map_model_size = emulator_init_mapper(pEmu, mapt, modelt);
 #endif
 
 

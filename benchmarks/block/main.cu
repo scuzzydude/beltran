@@ -334,13 +334,15 @@ int main(int argc, char** argv) {
             close(fd_in);
         }
         //Controller ctrl(settings.controllerPath, settings.nvmNamespace, settings.cudaDevice);
-        
+
+		printf("Emulation Flags = 0x%lx\n", settings.emulationFlags);
+		
         cuda_err_chk(cudaSetDevice(settings.cudaDevice));
         std::vector<Controller*> ctrls(settings.n_ctrls);
         for (size_t i = 0 ; i < settings.n_ctrls; i++)
 	{
 #ifdef BAM_EMU_COMPILE            
-            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  BAM_EMU_TARGET_ENABLE, settings.blkSize, settings.pageSize, settings.loopback);
+            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  settings.emulationFlags, settings.blkSize, settings.pageSize, settings.loopback);
 #else
             ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues);
 #endif

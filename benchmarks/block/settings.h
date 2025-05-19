@@ -82,8 +82,9 @@ struct Settings
 	uint32_t        series;
 	uint32_t        sequence;
 	uint32_t        loopback;
-
 #endif	
+	uint64_t        emulationFlags;
+
     Settings();
     void parseArguments(int argc, char** argv);
 
@@ -425,6 +426,8 @@ void Settings::parseArguments(int argc, char** argv)
         {'Q', OptionPtr(new Option<uint32_t>(sequence, "number", "sequence", "Test Sequence", "0"))},
         {'L', OptionPtr(new Option<uint32_t>(loopback, "number", "loopback_mask", "EMU Loopback Mask", "0"))},
 #endif
+        {'m', OptionPtr(new Option<uint64_t>(emulationFlags, "number", "emulationFlags", "emulationFlags", "3"))},
+
     };
 
     string optionString;
@@ -528,10 +531,7 @@ Settings::Settings()
 	series = 0;
 	sequence = 0;
 #endif	
-
-#ifdef BA_DEBUG_SETTINGS
-				fprintf(stderr, "BA_DEBUG_SETTINGS(1)\n");
-#endif
+	emulationFlags = BAM_EMU_TARGET_ENABLE | BAM_EMU_TARGET_LATENCY;
 	
 }
 
