@@ -209,13 +209,14 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 		throw error(string("Unexpected error while mapping IO memory (cudaHostRegister): ") + cudaGetErrorString(err));
 	}
 
-
-
 #ifdef BAM_EMU_COMPILE	
-	ns.lba_data_size = sectorSize;
+	if(emulationTarget & BAM_EMU_TARGET_ENABLE)
+	{
+		ns.lba_data_size = sectorSize;
 #ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
-	thread_counter = 0;
+		thread_counter = 0;
 #endif
+	}
 #endif
 
     queue_counter = 0;
@@ -231,21 +232,23 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     printf("SQs: %d\tCQs: %d\tn_qps: %d queueDepth = %ld\n", n_sqs, n_cqs, n_qps, queueDepth );
     h_qps = (QueuePair**) malloc(h_qp_size);
 
-	printf("h_qps = %p h_qp_size = %ld\n", h_qps, h_qp_size);
+	printf("h_qps = %p h_qp_size = %ld emulationTarget = %d\n", h_qps, h_qp_size, emulationTarget);
 	
 	
     cuda_err_chk(cudaMalloc((void**)&d_qps, sizeof(QueuePair)*n_qps));
     for (size_t i = 0; i < n_qps; i++) 
 	{
-   //     printf("started creating qp %ld\n", i);
+     //   printf("started creating qp %ld\n", i);
         h_qps[i] = new QueuePair(ctrl, cudaDevice, ns, info, aq_ref, i+1, queueDepth, pEmu);
-   //     printf("finished creating qp %ld\n", i);
+    //    printf("finished creating qp %ld\n", i);
         cuda_err_chk(cudaMemcpy(d_qps+i, h_qps[i], sizeof(QueuePair), cudaMemcpyHostToDevice));
-  //      printf("finished copy QP Memory to device %ld\n", i);
+   //     printf("finished copy QP Memory to device %ld\n", i);
 
 #ifdef BAM_EMU_COMPILE
+	if(emulationTarget & BAM_EMU_TARGET_ENABLE)
+	{
 
-	//	printf("set_doorbell QP(%i) queuePair = %p h_qps = %p\n", i, &pEmu->tgt.queuePairs[i], &h_qps[i]);
+		//printf("set_doorbell QP(%i) queuePair = %p h_qps = %p\n", i, &pEmu->tgt.queuePairs[i], &h_qps[i]);
 
 		pEmu->tgt.queuePairs[i].cQ.db = h_qps[i]->cq.db;
 		pEmu->tgt.queuePairs[i].sQ.db = h_qps[i]->sq.db;
@@ -255,7 +258,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 	//	printf("(%d) cq.db = %p sq.sb = %p\n", i, pEmu->tgt.queuePairs[i].cQ.db, pEmu->tgt.queuePairs[i].sQ.db);
 
 		emulator_update_d_queue(pEmu,  i + 1, 1);
-
+	}
 #endif
 
 		
@@ -265,9 +268,12 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 
 #ifdef BAM_EMU_COMPILE	
 #ifdef 	BAM_RUN_EMU_IN_BAM_KERNEL
-		pDevQueuePairs = pEmu->tgt.pDevQPairs;
-		printf("pDevQueuePairs = %p pEmu->tgt.pDevQPairs =%p\n", pDevQueuePairs, pEmu->tgt.pDevQPairs);
-		pDevTgt_control = pEmu->tgt.pTgt_control;
+		if(emulationTarget & BAM_EMU_TARGET_ENABLE)
+		{
+			pDevQueuePairs = pEmu->tgt.pDevQPairs;
+			printf("pDevQueuePairs = %p pEmu->tgt.pDevQPairs =%p\n", pDevQueuePairs, pEmu->tgt.pDevQPairs);
+			pDevTgt_control = pEmu->tgt.pTgt_control;
+		}
 #endif
 #endif
 
@@ -280,6 +286,9 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 
 
 #ifdef BAM_EMU_COMPILE
+	if(emulationTarget & BAM_EMU_TARGET_ENABLE)
+	{
+
 #ifdef BAM_EMU_START_EMU_POST_Q_CONFIG
 #ifdef BAM_EMU_START_EMU_IN_APP_LAYER
 	printf("BAM_EMU_START_EMU_IN_APP_LAYER delaying start_emulation_target()\n");
@@ -287,6 +296,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
 	start_emulation_target(pEmu);
 #endif	
 #endif
+	}
 #endif
 }
 
@@ -343,6 +353,69 @@ inline void Controller::reserveQueues(uint16_t numSubs, uint16_t numCpls)
     n_cqs = numCpls;
 
 }
+
+//********************************************** The can be moved to another file, reference to Controller not found, header ordering...
+uint32_t emu_model_aggregation_private_init(bam_host_emulator *pEmu, bam_emu_target_model *pModel) 
+{
+	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_INIT_AGG);
+	int num_controllers = (pEmu->emulationTargetFlags & BAM_EMU_TARGET_AGG_CONT_BITMASK) >> BAM_EMU_TARGET_AGG_CONT_BITSHIFT;
+	size_t size = sizeof(emu_aggregation_model);
+	emu_aggregation_model *pAggModel;
+	char devPath[32];
+	Controller *pCntl;
+	uint32_t queueDepth = 16;
+	uint32_t numberOfQueues = 16;
+	
+		
+	
+	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_aggregation_private_init(pEmu = %p, pModel = %p) num_controllers = %d size = %ld\n", pEmu, pModel, num_controllers, size);
+
+	pModel->pvHostPrivate = malloc(size);
+
+	BAM_EMU_HOST_ASSERT(pModel->pvHostPrivate);
+
+	pAggModel = (emu_aggregation_model *)pModel->pvHostPrivate;
+
+	pAggModel->num_controllers = num_controllers;
+
+	pAggModel->ppvHostCtrls = (void **)malloc(sizeof(Controller *) * num_controllers);
+
+	BAM_EMU_HOST_ASSERT(pAggModel->ppvHostCtrls);
+	
+	pAggModel->d_ctrls_buff = createBuffer(num_controllers * sizeof(Controller*), pEmu->cudaDevice);
+
+	pAggModel->ppvDevCtrls = (void **)pAggModel->d_ctrls_buff.get();
+
+
+	pModel->d_model_private = createBuffer(size, pEmu->cudaDevice);
+
+	pModel->pvDevPrivate = pModel->d_model_private.get();
+
+	            
+	for (size_t i = 0 ; i < num_controllers; i++)
+	{
+		sprintf(devPath, "/dev/libnvm%d", i);
+
+		BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_aggregation_private_init() %s\n", devPath);
+
+		
+		pCntl = new Controller(devPath, 1, pEmu->cudaDevice, queueDepth, numberOfQueues);
+
+		pAggModel->ppvHostCtrls[i] = (void *)pCntl;
+
+		cuda_err_chk(cudaMemcpy(pAggModel->ppvDevCtrls+i, pCntl->d_ctrl_ptr, sizeof(Controller*), cudaMemcpyHostToDevice));
+
+	}
+	
+
+
+	cuda_err_chk(cudaMemcpy(pModel->pvDevPrivate, pModel->pvHostPrivate, size, cudaMemcpyHostToDevice));
+
+
+
+	return 0;
+}
+
 
 
 

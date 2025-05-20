@@ -55,6 +55,12 @@ volatile uint32_t * emu_host_get_db_pointer(int qidx, int cq, bam_host_emulator 
 
 		*pNeedDevicePtr = 1;
 
+		if(pEmu == NULL)
+		{
+			return pQueue->db;
+		}
+
+
 #ifndef BAM_EMU_COMPILE 
 		return pQueue->db;
 #else

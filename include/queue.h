@@ -211,7 +211,7 @@ struct QueuePair
         void* devicePtr = nullptr;
 
 		
-//		printf("QP(%d) CQ post mm_ptr = %p db = %p DIF  = %p\n", qp_id, ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr));
+		//printf("QP(%d) CQ post mm_ptr = %p db = %p DIF  = %p pEmu = %p\n", qp_id, ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr), pEmu);
 
 		this->cq.db = emu_host_get_db_pointer((qp_id - 1), 1, pEmu, &this->cq, &need_device_ptr);
 
@@ -226,7 +226,7 @@ struct QueuePair
 		}
 
 
-//		printf("DEVICE cq.db = %p\n", this->cq.db);
+		//printf("DEVICE cq.db = %p\n", this->cq.db);
 		
 			
 

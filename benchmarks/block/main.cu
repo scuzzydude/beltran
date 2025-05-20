@@ -339,15 +339,17 @@ int main(int argc, char** argv) {
 		
         cuda_err_chk(cudaSetDevice(settings.cudaDevice));
         std::vector<Controller*> ctrls(settings.n_ctrls);
-        for (size_t i = 0 ; i < settings.n_ctrls; i++)
-	{
+
 #ifdef BAM_EMU_COMPILE            
-            ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  settings.emulationFlags, settings.blkSize, settings.pageSize, settings.loopback);
+		ctrls[0] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[0] : intel_ctrls_paths[0], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues,  settings.emulationFlags, settings.blkSize, settings.pageSize, settings.loopback);
 #else
+
+        for (size_t i = 0 ; i < settings.n_ctrls; i++)
+        {
             ctrls[i] = new Controller(settings.ssdtype == 0 ? sam_ctrls_paths[i] : intel_ctrls_paths[i], settings.nvmNamespace, settings.cudaDevice, settings.queueDepth, settings.numQueues);
+		}
+
 #endif
-	}
-	
         //auto dma = createDma(ctrl.ctrl, NVM_PAGE_ALIGN(64*1024*10, 1UL << 16), settings.cudaDevice, settings.adapter, settings.segmentId);
 
         //std::cout << dma.get()->vaddr << std::endl;
