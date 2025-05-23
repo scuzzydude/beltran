@@ -354,7 +354,9 @@ inline void Controller::reserveQueues(uint16_t numSubs, uint16_t numCpls)
 
 }
 
-//********************************************** The can be moved to another file, reference to Controller not found, header ordering...
+//********************************************** 
+//TODO:  Implement this first using existing Controller/QueuePair 
+//later, implement simpler, emulator only structures, EMU won't need all the logic that BaM does 
 uint32_t emu_model_aggregation_private_init(bam_host_emulator *pEmu, bam_emu_target_model *pModel) 
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_INIT_AGG);
@@ -416,6 +418,12 @@ uint32_t emu_model_aggregation_private_init(bam_host_emulator *pEmu, bam_emu_tar
 	return 0;
 }
 
+
+__device__ int emu_model_agg_sq_enqueue(emu_aggregation_model *pAggModel, uint16_t cidx, uint16_t qidx, storage_next_emuluator_context *pContext)
+{
+	
+	return 0;
+}
 
 
 
