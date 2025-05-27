@@ -3,6 +3,24 @@
 
 #define EMU_MAX_QUEUES 32
 
+typedef struct __align__(64) 
+{
+    uint16_t                no;             // Queue number (must be unique per SQ/CQ pair)
+    uint16_t                max_entries;    // Maximum number of queue entries supported
+    uint16_t                entry_size;     // Queue entry size
+    uint32_t                head;           // Queue's head pointer
+    uint32_t                tail;           // Queue's tail pointer
+    // TODO: Create bitfield for phase, add a remote field indicating
+    //       if queue is far memory nor not, in which case we whould NOT do
+    //       cache operations
+    int16_t                 phase;          // Current phase bit
+    uint32_t                last;           // Used internally to check db writes
+    volatile uint32_t*      db;             // Pointer to doorbell register (NB! write only)
+    volatile void*          vaddr;          // Virtual address to start of queue memory
+    uint64_t                ioaddr;         // Physical/IO address of the memory page
+} __attribute__((aligned (64))) emu_nvm_queue_t;
+
+
 
 struct EmuQueuePair
 {
@@ -36,6 +54,184 @@ struct EmuQueuePair
 	size_t cq_mem_size;
 	uint64_t cq_size;
 	uint64_t sq_size;
+
+#define EMU_MAX_SQ_ENTRIES_64K  (64*1024/64)
+#define EMU_MAX_CQ_ENTRIES_64K  (64*1024/16)
+
+	
+	inline void emu_init_gpu_specific_struct( const uint32_t cudaDevice) {
+	#if 1
+		  //this->sq_tickets = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
+		  //this->sq_head_mark = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
+		  //this->sq_tail_mark = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
+		  //this->sq_cid = createBuffer(65536 * sizeof(padded_struct), cudaDevice);
+		  //this->sq.tickets = (padded_struct*) this->sq_tickets.get();
+		  //this->sq.head_mark = (padded_struct*) this->sq_head_mark.get();
+		  //this->sq.tail_mark = (padded_struct*) this->sq_tail_mark.get();
+		  //this->sq.cid = (padded_struct*) this->sq_cid.get();
+	  //	std::cout << "init_gpu_specific: " << std::hex << this->sq.cid <<  std::endl;
+		  this->sq.qs_minus_1 = this->sq.qs - 1;
+		  this->sq.qs_log2 = (uint32_t) std::log2(this->sq.qs);
+	
+	
+		  //this->cq_tickets = createBuffer(this->cq.qs * sizeof(padded_struct), cudaDevice);
+		  this->cq_head_mark = createBuffer(this->cq.qs * sizeof(padded_struct), cudaDevice);
+		  //this->cq_tail_mark = createBuffer(this->cq.qs * sizeof(padded_struct), cudaDevice);
+		  //this->cq.tickets = (padded_struct*) this->cq_tickets.get();
+		  this->cq.head_mark = (padded_struct*) this->cq_head_mark.get();
+		  //this->cq.tail_mark = (padded_struct*) this->cq_tail_mark.get();
+		  this->cq.qs_minus_1 = this->cq.qs - 1;
+		  this->cq.qs_log2 = (uint32_t) std::log2(this->cq.qs);
+		  this->cq_pos_locks = createBuffer(this->cq.qs * sizeof(padded_struct), cudaDevice);
+		  this->cq.pos_locks = (padded_struct*) this->cq_pos_locks.get();
+	
+		  //this->cq_clean_cid = createBuffer(this->cq.qs * sizeof(uint16_t), cudaDevice);
+		 // this->cq.clean_cid = (uint16_t*) this->cq_clean_cid.get();
+#endif
+	}
+
+
+	inline void emu_queue_pair_prepare(const nvm_ctrl_t* ctrl, const uint32_t cudaDevice, const struct nvm_ns_info ns, const struct nvm_ctrl_info info, const uint16_t qp_id, const uint64_t queueDepth)
+		{
+	//		 printf("queue_pair_prepare 0 mm_ptr = %p\n", ctrl->mm_ptr);
+			
+			uint64_t cap = ((volatile uint64_t*) ctrl->mm_ptr)[0];
+			  bool cqr = (cap & 0x0000000000010000) == 0x0000000000010000;
+			  //uint64_t sq_size = 16;
+			  //uint64_t cq_size = 16;
+	
+			 
+			  
+			  
+			  uint64_t sq_size = (cqr) ?
+				  ((EMU_MAX_SQ_ENTRIES_64K <= ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) )) ? EMU_MAX_SQ_ENTRIES_64K :  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) ) ) :
+				  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) );
+			  uint64_t cq_size = (cqr) ?
+				  ((EMU_MAX_CQ_ENTRIES_64K <= ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) )) ? EMU_MAX_CQ_ENTRIES_64K :  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) ) ) :
+				  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) );
+	
+	//		  printf("queue_pair_prepare sq_size = %ld cq_size = %ld, mm_ptr[0] = %04x\n", sq_size, cq_size, ((volatile uint16_t*) ctrl->mm_ptr)[0]);
+			  
+			  sq_size = std::min(queueDepth, sq_size);
+			  cq_size = std::min(queueDepth, cq_size);
+	
+			  this->cq_size = cq_size;
+			  this->sq_size = sq_size;
+			  
+			  sq_need_prp = false;//(!cqr) || (sq_size > MAX_SQ_ENTRIES_64K);
+			  cq_need_prp = false;// (!cqr) || (cq_size > MAX_CQ_ENTRIES_64K);
+			
+			  sq_mem_size = sq_size * sizeof(nvm_cmd_t) + sq_need_prp*(64*1024);
+			  cq_mem_size = cq_size * sizeof(nvm_cpl_t) + cq_need_prp*(64*1024);
+	
+	//		  std::cout << sq_size << "\t" << sq_mem_size << std::endl;
+			//size_t queueMemSize = ctrl.info.page_size * 2;
+			//size_t prpListSize = ctrl.info.page_size * numThreads * (doubleBuffered + 1);
+			//size_t prp_mem_size = sq_size * (4096) * 2;
+	//		  std::cout << "Started creating DMA\n";
+			// qmem->vaddr will be already a device pointer after the following call
+			this->sq_mem = createDma(ctrl, NVM_PAGE_ALIGN(sq_mem_size, 1UL << 16), cudaDevice);
+	 // 	  std::cout << "Finished creating sq dma vaddr: " << this->sq_mem.get()->vaddr << "\tioaddr: " << std::hex<< this->sq_mem.get()->ioaddrs[0] << std::dec << std::endl;
+			this->cq_mem = createDma(ctrl, NVM_PAGE_ALIGN(cq_mem_size, 1UL << 16), cudaDevice);
+			//this->prp_mem = createDma(ctrl, NVM_PAGE_ALIGN(prp_mem_size, 1UL << 16), cudaDevice, adapter, segmentId);
+	 // 	  std::cout << "Finished creating cq dma vaddr: " << this->cq_mem.get()->vaddr << "\tioaddr: " << std::hex << this->cq_mem.get()->ioaddrs[0] << std::dec << std::endl;
+	
+			// Set members
+			this->pageSize = info.page_size;
+			this->block_size = ns.lba_data_size;
+	
+			this->block_size_minus_1 = ns.lba_data_size-1;
+			this->block_size_log = std::log2(ns.lba_data_size);
+	  //	  std::cout << "block size: " << this->block_size << "\tblock_size_log: " << this->block_size_log << std::endl ;
+			this->nvmNamespace = ns.ns_id;
+	
+			//this->prpList = NVM_DMA_OFFSET(this->prp_mem, 0);
+			//this->prpListIoAddrs = this->prp_mem->ioaddrs;
+			this->qp_id = qp_id;
+	
+			
+		  //  std::cout << "before nvm_admin_cq_create\n";
+		}
+	
+		
+		inline EmuQueuePair( const nvm_ctrl_t* ctrl, const uint32_t cudaDevice, const struct nvm_ns_info ns, const struct nvm_ctrl_info info, nvm_aq_ref& aq_ref, const uint16_t qp_id, const uint64_t queueDepth, bam_host_emulator *pEmu = NULL)
+		{
+			int need_device_ptr = 1;
+			cudaError_t err;
+			int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
+
+			emu_queue_pair_prepare(ctrl,cudaDevice, ns, info, qp_id, queueDepth);
+	
+			int status = nvm_admin_cq_create(aq_ref, &this->cq, qp_id, this->cq_mem.get(), 0, cq_size, cq_need_prp);
+			if (!nvm_ok(status))
+			{
+				throw error(string("Failed to create completion queue: ") + nvm_strerror(status));
+			}
+			// std::cout << "after nvm_admin_cq_create\n";
+	
+			// Get a valid device pointer for CQ doorbell
+			void* devicePtr = nullptr;
+	
+			
+			BAM_EMU_HOST_DBG_PRINT(verbose,"QP(%d) CQ post mm_ptr = %p db = %p DIF  = %p pEmu = %p\n", qp_id, ctrl->mm_ptr, this->cq.db, ((uint64_t)this->cq.db - (uint64_t)ctrl->mm_ptr), pEmu);
+	
+			//this->cq.db = emu_host_get_db_pointer((qp_id - 1), 1, pEmu, &this->cq, &need_device_ptr);
+	
+			if(need_device_ptr)
+			{
+				err = cudaHostGetDevicePointer(&devicePtr, (void*) this->cq.db, 0);
+				if (err != cudaSuccess)
+				{
+					throw error(string("Failed to get device pointer") + cudaGetErrorString(err));
+				}
+				this->cq.db = (volatile uint32_t*) devicePtr;
+			}
+	
+	
+			//printf("DEVICE cq.db = %p\n", this->cq.db);
+			
+				
+	
+			// Create submission queue
+			//	nvm_admin_sq_create(nvm_aq_ref ref, nvm_queue_t* sq, const nvm_queue_t* cq, uint16_t id, const nvm_dma_t* dma, size_t offset, size_t qs, bool need_prp = false)
+			//printf("CALL nvm_admin_sq_create() sq_size =%ld\n", sq_size);
+			
+			status = nvm_admin_sq_create(aq_ref, &this->sq, &this->cq, qp_id, this->sq_mem.get(), 0, sq_size, sq_need_prp);
+			if (!nvm_ok(status))
+			{
+				throw error(string("Failed to create submission queue: ") + nvm_strerror(status));
+			}
+	
+	
+			// Get a valid device pointer for SQ doorbell
+	
+			//this->sq.db = emu_host_get_db_pointer((qp_id - 1), 0, pEmu, &this->sq, &need_device_ptr);
+	
+			if( need_device_ptr)
+			{
+				err = cudaHostGetDevicePointer(&devicePtr, (void*) this->sq.db, 0);
+				if (err != cudaSuccess)
+				{
+					throw error(string("Failed to get device pointer") + cudaGetErrorString(err));
+				}
+				this->sq.db = (volatile uint32_t*) devicePtr;
+			}
+	
+			//std::cout << "Finish Making Queue\n";
+	
+			emu_init_gpu_specific_struct(cudaDevice);
+	
+			//printf("init_gpu_specific_struct() RETURN \n");
+					
+	
+			return;
+	
+	
+	
+		}
+	
+	
+
 
 };
 
@@ -144,6 +340,8 @@ inline EmuController::EmuController(const char* path, uint32_t ns_id, uint32_t c
     , aq_ref(nullptr)
     , deviceId(cudaDevice)
 {
+	
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
 	unsigned int mmFlag = cudaHostRegisterIoMemory;
 
 	{
@@ -176,6 +374,7 @@ inline EmuController::EmuController(const char* path, uint32_t ns_id, uint32_t c
 	}
 
 
+	BAM_EMU_HOST_DBG_PRINT(verbose,"sizeof(EmuController) = %ld sizeof(EmuQueuePair) = %ld\n", sizeof(EmuController), sizeof(EmuQueuePair));
 
     queue_counter = 0;
     page_size = ctrl->page_size;
@@ -197,7 +396,7 @@ inline EmuController::EmuController(const char* path, uint32_t ns_id, uint32_t c
     for (size_t i = 0; i < n_qps; i++) 
 	{
      //   printf("started creating qp %ld\n", i);
-     //   h_qps[i] = new QueuePair(ctrl, cudaDevice, ns, info, aq_ref, i+1, queueDepth, pEmu);
+        h_qps[i] = new EmuQueuePair(ctrl, cudaDevice, ns, info, aq_ref, i+1, queueDepth, NULL);
     //    printf("finished creating qp %ld\n", i);
         cuda_err_chk(cudaMemcpy(d_qps+i, h_qps[i], sizeof(EmuQueuePair), cudaMemcpyHostToDevice));
    //     printf("finished copy QP Memory to device %ld\n", i);
@@ -205,16 +404,13 @@ inline EmuController::EmuController(const char* path, uint32_t ns_id, uint32_t c
 		
 
     }
-    printf("finished creating all qps\n");
-
-
+    printf("finished creating all qps %d\n", n_qps);
     
     d_ctrl_buff = createBuffer(sizeof(EmuController), cudaDevice);
     d_ctrl_ptr = d_ctrl_buff.get();
     cuda_err_chk(cudaMemcpy(d_ctrl_ptr, this, sizeof(EmuController), cudaMemcpyHostToDevice));
 
-
-
+	 
 
 
 }
@@ -233,6 +429,50 @@ inline EmuController::~EmuController()
     nvm_ctrl_free(ctrl);
 
 }
+
+//************************************************************************************************************
+//************************************************************************************************************
+//**  Device Code 
+//************************************************************************************************************
+//************************************************************************************************************
+
+#define EMUQ_GET_HEAD(_q) _q->head.load(simt::memory_order_relaxed)
+#define EMUQ_GET_TAIL(_q) _q->tail.load(simt::memory_order_relaxed)
+#define EMUQ_GET_QS(_q) _q->qs
+#define EMUQ_TAIL_INC(_q) _q->tail.fetch_add(1, simt::memory_order_relaxed)
+#define EMUQ_TAIL_STORE(_q, _v) _q->tail.store(_v, simt::memory_order_release)
+
+__device__ inline static nvm_cmd_t* emu_ctrl_sq_enqueue(nvm_queue_t* pSq)
+
+{
+	nvm_cmd_t* pCmd;
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
+	uint16_t tail = EMUQ_GET_TAIL(pSq);
+	
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_ctrl_sq_enqueue(qs = %d head = %d tail = %d\n", EMUQ_GET_QS(pSq), EMUQ_GET_HEAD(pSq), EMUQ_GET_TAIL(pSq));
+	
+	if ((uint16_t) ((tail - EMUQ_GET_HEAD(pSq)) % EMUQ_GET_QS(pSq)) == (EMUQ_GET_QS(pSq) - 1))
+	{
+		return NULL;
+	}
+
+	pCmd = (((nvm_cmd_t*)(pSq->vaddr)) + tail);
+	
+	EMUQ_TAIL_INC(pSq);
+
+	if(EMUQ_GET_TAIL(pSq) == EMUQ_GET_QS(pSq))
+	{
+		pSq->phase = !pSq->phase;
+		
+		EMUQ_TAIL_STORE(pSq, 0);
+	}
+
+
+	return pCmd;
+	
+}
+
+
 
 
 
