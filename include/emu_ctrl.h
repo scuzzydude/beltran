@@ -440,9 +440,28 @@ inline EmuController::~EmuController()
 #define EMUQ_GET_TAIL(_q) _q->tail.load(simt::memory_order_relaxed)
 #define EMUQ_GET_QS(_q) _q->qs
 #define EMUQ_TAIL_INC(_q) _q->tail.fetch_add(1, simt::memory_order_relaxed)
+#define EMUQ_HEAD_INC(_q) _q->head.fetch_add(1, simt::memory_order_relaxed)
 #define EMUQ_TAIL_STORE(_q, _v) _q->tail.store(_v, simt::memory_order_release)
+#define EMUQ_HEAD_STORE(_q, _v) _q->head.store(_v, simt::memory_order_release)
 #define EMUQ_GET_LAST(_q) _q->last
-#define EMUQ_RING_DB(_q, _v) asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(_q->db),"r"(_v) : "memory")
+#define EMUQ_RING_DB(_q, _v) asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(_q->db),"r"((uint32_t)_v) : "memory")
+
+__device__ static inline void emu_ctrl_nvm_sq_update(nvm_queue_t* pSq)
+{
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
+
+	EMUQ_HEAD_INC(pSq);
+
+	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_ctrl_nvm_sq_update(qs = %d head = %d)\n", EMUQ_GET_HEAD(pSq), EMUQ_GET_QS(pSq));
+
+	if(EMUQ_GET_HEAD(pSq) == EMUQ_GET_QS(pSq))
+	{
+		EMUQ_HEAD_STORE(pSq, 0);
+	}
+	
+
+}
+		
 
 __device__ static inline nvm_cmd_t* emu_ctrl_sq_enqueue(nvm_queue_t* pSq)
 
@@ -487,11 +506,13 @@ __device__ static inline void emu_ctrl_nvm_sq_submit(nvm_queue_t* pSq)
     {
         //nvm_cache_flush((void*) sq->vaddr, sizeof(nvm_cmd_t) * sq->max_entries);
         //nvm_wcb_flush(); 
-		EMUQ_RING_DB(pSq, (uint32_t)tail);
+		BAM_EMU_DEV_DBG_PRINT1(verbose, "emu_ctrl_nvm_sq_submit() RING SQ DOORBELL = %d\n", tail);
+		EMUQ_RING_DB(pSq, tail);
 
         pSq->last = tail;
     }
 }
+
 
 __device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_cull(nvm_queue_t* pCq)
 {
@@ -499,6 +520,7 @@ __device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_cull(nvm_queue_t* pCq)
     nvm_cpl_t* cpl = (nvm_cpl_t*) (((unsigned char*) pCq->vaddr) + EMUQ_GET_QS(pCq) * EMUQ_GET_HEAD(pCq));
 	uint32_t cpl_entry = cpl->dword[3];
 	uint8_t phase = (uint8_t)((cpl_entry & 0x00010000) >> 16);
+	uint16_t head;
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_ctrl_nvm_cq_cull(%p) head = %d phase = %d cpl_entry = %08x\n", pCq,EMUQ_GET_HEAD(pCq), pCq->phase, cpl_entry);
 	
@@ -513,6 +535,25 @@ __device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_cull(nvm_queue_t* pCq)
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_ctrl_nvm_cq_cull(GOOD) cpl = %p cid = 0x%04x\n", cpl, (cpl_entry & 0x0000ffff));
 
+	EMUQ_HEAD_INC(pCq);
+	head = EMUQ_GET_HEAD(pCq);
+	
+	if(head == EMUQ_GET_QS(pCq))
+	{
+		head = 0;
+		EMUQ_HEAD_STORE(pCq, head);
+
+		pCq->phase = (pCq->phase ? 0 : 1);
+	}
+
+	if(EMUQ_GET_LAST(pCq) != head)
+	{
+		
+		BAM_EMU_DEV_DBG_PRINT1(verbose, "emu_ctrl_nvm_cq_cull() RING CQ DOORBELL = %d\n", head);
+		EMUQ_RING_DB(pCq, head);
+		pCq->last = head;
+
+	}
 
     return cpl;
 }

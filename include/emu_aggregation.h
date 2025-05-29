@@ -197,10 +197,14 @@ __device__ void add_agg_context_tail(agg_queue_control *queue, agg_context *newN
 __device__ agg_context* find_and_remove_agg_context_by_cid(agg_queue_control *queue, uint16_t cid)
 {
     if (!queue) return NULL;
+	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_AGG);
 
     agg_context *curr = queue->pHead;
-    while (curr) {
-        if (curr->agg_context.cid == cid) {
+    while (curr) 
+	{
+		BAM_EMU_DEV_DBG_PRINT4(BAM_EMU_DBGLVL_ERROR, "agg_context_by_cid(%d) curr = %p curr_cid = 0x%04x cid = 0x%04x\n", queue->count, curr, curr->agg_context.cid, cid);
+        if (curr->agg_context.cid == cid) 
+		{
             // Remove from list
             if (curr->agg_context.pPrev)
                 curr->agg_context.pPrev->agg_context.pNext = curr->agg_context.pNext;
@@ -269,7 +273,6 @@ __device__  agg_queue_control* emu_model_agg_aqc(void ** ppvThreadContext, uint1
 
 typedef ulonglong4 agg_copy_type;
 
-__device__ int gLive = 0;
 __device__ inline int emu_model_agg_sq_enqueue(emu_aggregation_model *pAggModel, uint16_t cidx, uint16_t qidx, storage_next_emuluator_context *pContext)
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_AGG);
@@ -309,7 +312,6 @@ __device__ inline int emu_model_agg_sq_enqueue(emu_aggregation_model *pAggModel,
 		}
 
 		__nanosleep(1000000);
-		gLive = 1;
 
 	}
 	else
@@ -346,6 +348,7 @@ __device__ inline int emu_model_aggregation_submit(bam_emu_target_model *pModel,
 
 	if(EMU_SUBMIT_GOOD == ret)
 	{
+		pAggContext->agg_context.cid = ((pContext->pCmd->nvme_cmd.dword[0] >> 16) & 0xFFFF);
 		add_agg_context_tail(emu_model_agg_aqc(ppvThreadContext, qidx), pAggContext);
 	}
 
@@ -388,6 +391,9 @@ __device__ inline storage_next_emuluator_context * emu_model_aggregation_cull(ba
 		
 		uint32_t cid = pCpl->dword[3] & 0xFFFF;
 
+		emu_ctrl_nvm_sq_update(&pQP->sq);
+		
+
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_cull(%p) COMPLETION cid 0x%04x\n", pCpl, cid);
 
 		pAggContext = find_and_remove_agg_context_by_cid(emu_model_agg_aqc(ppvThreadContext, qidx), cid);
@@ -401,17 +407,6 @@ __device__ inline storage_next_emuluator_context * emu_model_aggregation_cull(ba
 	else
 	{
 		BAM_EMU_DEV_DBG_PRINT1(verbose, "emu_model_latency_cull(%p) NO COMPLETION!!! \n", pCpl);
-
-		if(gLive)
-		{
-			gLive++;
-		}
-		if(gLive > 100)
-		{
-			BAM_EMU_DEV_DBG_PRINT1(verbose, "emu_model_latency_cull(%p) gLive = %d!!! \n", gLive);
-			BAM_EMU_DEVICE_ASSERT(0);
-
-		}
 	}
 
 	return (storage_next_emuluator_context *)pAggContext;
