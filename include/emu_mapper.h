@@ -178,7 +178,7 @@ __device__ inline storage_next_emuluator_context * emu_tgt_model_Cull(bam_emu_ma
 			
 				
 		case EMU_MODEL_TYPE_AGGREGATION:
-			return NULL;//emu_model_aggregation_submit(&pDevMapper->model, pContext, pvThreadContext);
+			return emu_model_aggregation_cull(&pDevMapper->model, ppvThreadContext);
 			
 		
 		case EMU_MODEL_TYPE_VENDOR:

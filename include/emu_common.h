@@ -462,7 +462,8 @@ typedef struct
 
 
 
-
+#define EMU_SUBMIT_GOOD  0
+#define EMU_SUBMIT_QFULL 1 
 
 
 

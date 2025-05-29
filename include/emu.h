@@ -679,6 +679,12 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_init_QueuePair(bam_emulated_
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT:(%ld) numQueues = %d numEmuThreads = %ld Queues_per_thread =%d\n", tid, pMgtTgtControl->numQueues, pMgtTgtControl->numEmuThreads, *pQueues_per_thread);
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT:(%ld) base_q_idx = %d pQProxy = %p\n", tid, base_q_idx, pQProxy);
 
+	if(EMU_MODEL_TYPE_AGGREGATION == pMgtTgtControl->pDevMapper->model.uModelType)
+	{
+		emu_model_agg_set_agg_control_ptr(&pDevQPairs[base_q_idx], pMgtTgtControl->pDevMapper->model.pvDevPrivate, *pQueues_per_thread, base_q_idx);
+	}
+
+
 	if(NULL != pQProxy)
 	{
 		memCpy32((uint32_t *)pQProxy,(uint32_t *)&pDevQPairs[base_q_idx],sizeof(bam_emulated_queue_pair) * (*pQueues_per_thread));

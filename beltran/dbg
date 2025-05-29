@@ -23,7 +23,7 @@ rm -rf bam_block.csv
 #./nvm-block-bench --threads=4194304 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1024 --random=true -U brandon-debug -E 11 -Q 17 -L 1
 #cuda-gdb --args ./nvm-block-bench --threads=4194304 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1024 --random=true -U brandon-debug -E 11 -Q 17 -L 4
 #cuda-gdb --args ./nvm-block-bench --threads=32768 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=32 --random=true -U brandon-debug -E 11 -Q 17 -L 1
-./nvm-block-bench --threads=1 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=32 --random=true -U brandon-debug -E 11 -Q 17 -L 1 -m 0x0105
+./nvm-block-bench --threads=1 --blk_size=64 --reqs=1 --pages=17578125 --queue_depth=1024  --page_size=512 --num_blks=2097152 --gpu=0 --n_ctrls=1 --num_queues=1 --random=true -U brandon-debug -E 11 -Q 17 -L 1 -m 0x0105
 
 
 #!/bin/bash
