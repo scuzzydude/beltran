@@ -71,10 +71,8 @@ uint32_t emu_model_aggregation_private_init(bam_host_emulator *pEmu, bam_emu_tar
 	emu_aggregation_model *pAggModel;
 	char devPath[32];
 	EmuController *pCntl;
-	uint32_t queueDepth = 16;
+	uint32_t queueDepth = 1024;
 	uint32_t numberOfQueues = 1;
-	
-		
 	
 	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_model_aggregation_private_init(pEmu = %p, pModel = %p) num_controllers = %d size = %ld\n", pEmu, pModel, num_controllers, size);
 
@@ -102,12 +100,11 @@ uint32_t emu_model_aggregation_private_init(bam_host_emulator *pEmu, bam_emu_tar
 	
 
 	            
-	for (size_t i = 0 ; i < num_controllers; i++)
+	for(size_t i = 0 ; i < num_controllers; i++)
 	{
 		sprintf(devPath, "/dev/libnvm%d", i);
 
-
-		
+	
 		pCntl = new EmuController(devPath, 1, pEmu->cudaDevice, queueDepth, numberOfQueues);
 
 		pAggModel->ppvHostCtrls[i] = (void *)pCntl;
@@ -134,7 +131,7 @@ uint32_t emu_model_aggregation_private_init(bam_host_emulator *pEmu, bam_emu_tar
 
 	cuda_err_chk(cudaMemcpy(pModel->pvDevPrivate, pModel->pvHostPrivate, size, cudaMemcpyHostToDevice));
 
-
+	
 	
 
 	return 0;
@@ -239,14 +236,54 @@ __device__ agg_context* find_and_remove_agg_context_by_cid(agg_queue_control *qu
 __device__ inline void emu_dump_sn_context(storage_next_emuluator_context *pContext)
 {
 	int	verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_D_AGG);
-
+	const bool bHexDump = false;
+	const bool bParsed  = true;
+	
 	uint32_t *dw = &pContext->pCmd->nvme_cmd.dword[0];
 
-	BAM_EMU_DEV_DBG_PRINT4(verbose, "NVME[00:03] 0x%08x %08x %08x %08x\n", dw[0], dw[1], dw[2], dw[3]);
-	BAM_EMU_DEV_DBG_PRINT4(verbose, "NVME[04:07] 0x%08x %08x %08x %08x\n", dw[4], dw[5], dw[6], dw[7]);
-	BAM_EMU_DEV_DBG_PRINT4(verbose, "NVME[08:11] 0x%08x %08x %08x %08x\n", dw[8], dw[9], dw[10], dw[11]);
-	BAM_EMU_DEV_DBG_PRINT4(verbose, "NVME[12:15] 0x%08x %08x %08x %08x\n", dw[12], dw[13], dw[14], dw[15]);
+	if(bHexDump)
+	{
 
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "NVME[00:03] 0x%08x %08x %08x %08x\n", dw[0], dw[1], dw[2], dw[3]);
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "NVME[04:07] 0x%08x %08x %08x %08x\n", dw[4], dw[5], dw[6], dw[7]);
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "NVME[08:11] 0x%08x %08x %08x %08x\n", dw[8], dw[9], dw[10], dw[11]);
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "NVME[12:15] 0x%08x %08x %08x %08x\n", dw[12], dw[13], dw[14], dw[15]);
+	}
+
+	if(bParsed)
+	{
+		//cmd->dword[0] = ((uint32_t) cid << 16) | (0x00 << 14) | (0x00 << 8) | (opcode & 0x7f);
+    	//cmd->dword[1] = ns_id;
+		char *szOps[4] = {"FLUSH", "WRITE", "READ", "XXX"};
+		unsigned char op = dw[0] & 0x7F;
+		char *szOp;
+
+		if(op < 3)
+		{
+			szOp = szOps[op];
+		}
+		else
+		{
+			szOp = szOps[3];
+		}
+
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "cid = 0x%04x namespace = 0x%08x opcode = 0x%02x = %s\n", 0xFFFF & (dw[0] >> 16), dw[1], op, szOp);
+		
+		
+		uint64_t prp1 = (uint64_t)dw[6] | ((uint64_t) dw[7] << 32UL);
+		uint64_t prp2 = (uint64_t)dw[8] | ((uint64_t) dw[9] << 32UL);
+
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "prp1 = %p prp2 = %p\n", (void *)prp1, (void *)prp2);
+
+		
+
+		uint64_t lba = (uint64_t)dw[10] | ((uint64_t) dw[11] << 32UL);
+		uint16_t nblks = (dw[12] & 0xFFFF)+1;
+		
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "lba = %p blocks = %d\n", (void *)lba, nblks);
+		
+
+	}
 
 }
 
@@ -298,13 +335,14 @@ __device__ inline int emu_model_agg_sq_enqueue(emu_aggregation_model *pAggModel,
 		agg_copy_type *queue_loc = (agg_copy_type *)pCmd;
 		agg_copy_type *cmd_loc = (agg_copy_type *)pContext->pCmd;
 		
-		BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_model_agg_sq_enqueue(pCmd=%p dword[0] = 0x%08x cid = 0x%04x)\n", pCmd, pCmd->dword[0], ((pCmd->dword[0] >> 16) & 0xFFFF));
 
 #pragma unroll
 		for (uint32_t i = 0; i < 64/sizeof(agg_copy_type); i++) 
 		{
 			queue_loc[i] = cmd_loc[i];
 		}
+
+		BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_model_agg_sq_enqueue(pCmd=%p dword[0] = 0x%08x cid = 0x%04x)\n", pCmd, pCmd->dword[0], ((pCmd->dword[0] >> 16) & 0xFFFF));
 
 		if(bRingDoorbell)
 		{
@@ -372,7 +410,6 @@ __device__ inline storage_next_emuluator_context * emu_model_aggregation_cull(ba
 	emu_aggregation_model *pAggModel;
 
 	pAggModel = (emu_aggregation_model *)pModel->pvDevPrivate;
-	
 
 	pCtrl = (EmuController *)pAggModel->ppvDevCtrls[cidx];
 	
@@ -388,11 +425,9 @@ __device__ inline storage_next_emuluator_context * emu_model_aggregation_cull(ba
 
 	if(pCpl)
 	{
-		
 		uint32_t cid = pCpl->dword[3] & 0xFFFF;
 
 		emu_ctrl_nvm_sq_update(&pQP->sq);
-		
 
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_model_latency_cull(%p) COMPLETION cid 0x%04x\n", pCpl, cid);
 

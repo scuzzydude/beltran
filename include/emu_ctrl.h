@@ -93,6 +93,8 @@ struct EmuQueuePair
 
 	inline void emu_queue_pair_prepare(const nvm_ctrl_t* ctrl, const uint32_t cudaDevice, const struct nvm_ns_info ns, const struct nvm_ctrl_info info, const uint16_t qp_id, const uint64_t queueDepth)
 		{
+			
+			int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
 	//		 printf("queue_pair_prepare 0 mm_ptr = %p\n", ctrl->mm_ptr);
 			
 			uint64_t cap = ((volatile uint64_t*) ctrl->mm_ptr)[0];
@@ -109,7 +111,10 @@ struct EmuQueuePair
 			  uint64_t cq_size = (cqr) ?
 				  ((EMU_MAX_CQ_ENTRIES_64K <= ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) )) ? EMU_MAX_CQ_ENTRIES_64K :  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) ) ) :
 				  ((((volatile uint16_t*) ctrl->mm_ptr)[0] + 1) );
-	
+
+				BAM_EMU_HOST_DBG_PRINT(verbose, "TARGET Q_SIZE (0 index) = %d\n",  ((volatile uint16_t*) ctrl->mm_ptr)[0] + 1);
+
+				  
 	//		  printf("queue_pair_prepare sq_size = %ld cq_size = %ld, mm_ptr[0] = %04x\n", sq_size, cq_size, ((volatile uint16_t*) ctrl->mm_ptr)[0]);
 			  
 			  sq_size = std::min(queueDepth, sq_size);
@@ -457,6 +462,9 @@ __device__ static inline void emu_ctrl_nvm_sq_update(nvm_queue_t* pSq)
 	if(EMUQ_GET_HEAD(pSq) == EMUQ_GET_QS(pSq))
 	{
 		EMUQ_HEAD_STORE(pSq, 0);
+
+		BAM_EMU_DEV_DBG_PRINT1(verbose, "emu_ctrl_nvm_sq_update(qs = %d head = 0) FLIP\n", EMUQ_GET_QS(pSq));
+
 	}
 	
 
@@ -474,6 +482,8 @@ __device__ static inline nvm_cmd_t* emu_ctrl_sq_enqueue(nvm_queue_t* pSq)
 	
 	if ((uint16_t) ((tail - EMUQ_GET_HEAD(pSq)) % EMUQ_GET_QS(pSq)) == (EMUQ_GET_QS(pSq) - 1))
 	{
+		BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_ctrl_sq_enqueue(qs = %d head = %d tail = %d) QFULL!!!!\n", EMUQ_GET_QS(pSq), EMUQ_GET_HEAD(pSq), EMUQ_GET_TAIL(pSq));
+
 		return NULL;
 	}
 
@@ -485,6 +495,8 @@ __device__ static inline nvm_cmd_t* emu_ctrl_sq_enqueue(nvm_queue_t* pSq)
 	{
 		pSq->phase = !pSq->phase;
 		
+		BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_ctrl_sq_enqueue(qs = %d head = %d tail = %d) FILP!!!!\n", EMUQ_GET_QS(pSq), EMUQ_GET_HEAD(pSq), EMUQ_GET_TAIL(pSq));
+
 		EMUQ_TAIL_STORE(pSq, 0);
 	}
 
@@ -517,7 +529,7 @@ __device__ static inline void emu_ctrl_nvm_sq_submit(nvm_queue_t* pSq)
 __device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_cull(nvm_queue_t* pCq)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
-    nvm_cpl_t* cpl = (nvm_cpl_t*) (((unsigned char*) pCq->vaddr) + EMUQ_GET_QS(pCq) * EMUQ_GET_HEAD(pCq));
+    nvm_cpl_t* cpl = (nvm_cpl_t*) (((unsigned char*) pCq->vaddr) + sizeof(nvm_cpl_t) * EMUQ_GET_HEAD(pCq));
 	uint32_t cpl_entry = cpl->dword[3];
 	uint8_t phase = (uint8_t)((cpl_entry & 0x00010000) >> 16);
 	uint16_t head;
