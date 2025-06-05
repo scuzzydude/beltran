@@ -3,6 +3,15 @@
 
 #define EMU_MAX_QUEUES 32
 
+#define BAM_USE_BAM_CTRL_QUEUES
+
+
+//We don't need much of the logic used by the BAM defined nvm_queue_t
+//resulting in bigger memory footprint than required.
+//However, the libnvm libarary functions are using the same structure definition
+//so we'd need to redefine or link to different instance.
+//review later, for standalone emulator, probably worth doing
+//for now BAM_USE_BAM_CTRL_QUEUES is the default
 typedef struct __align__(64) 
 {
     uint16_t                no;             // Queue number (must be unique per SQ/CQ pair)
@@ -31,8 +40,13 @@ struct EmuQueuePair
     uint32_t            nvmNamespace;
     //void*               prpList;
     //uint64_t*           prpListIoAddrs;
+#ifdef BAM_USE_BAM_CTRL_QUEUES
     nvm_queue_t         sq;
     nvm_queue_t         cq;
+#else
+	emu_nvm_queue_t     sq;
+	emu_nvm_queue_t     cq;
+#endif
     uint16_t            qp_id;
     DmaPtr              sq_mem;
     DmaPtr              cq_mem;
@@ -60,15 +74,15 @@ struct EmuQueuePair
 
 	
 	inline void emu_init_gpu_specific_struct( const uint32_t cudaDevice) {
-	#if 1
+#ifdef BAM_USE_BAM_CTRL_QUEUES
 		  //this->sq_tickets = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
 		  //this->sq_head_mark = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
 		  //this->sq_tail_mark = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
-		  //this->sq_cid = createBuffer(65536 * sizeof(padded_struct), cudaDevice);
+		  this->sq_cid = createBuffer(65536 * sizeof(padded_struct), cudaDevice);
 		  //this->sq.tickets = (padded_struct*) this->sq_tickets.get();
 		  //this->sq.head_mark = (padded_struct*) this->sq_head_mark.get();
 		  //this->sq.tail_mark = (padded_struct*) this->sq_tail_mark.get();
-		  //this->sq.cid = (padded_struct*) this->sq_cid.get();
+		  this->sq.cid = (padded_struct*) this->sq_cid.get();
 	  //	std::cout << "init_gpu_specific: " << std::hex << this->sq.cid <<  std::endl;
 		  this->sq.qs_minus_1 = this->sq.qs - 1;
 		  this->sq.qs_log2 = (uint32_t) std::log2(this->sq.qs);
@@ -115,7 +129,7 @@ struct EmuQueuePair
 				BAM_EMU_HOST_DBG_PRINT(verbose, "TARGET Q_SIZE (0 index) = %d\n",  ((volatile uint16_t*) ctrl->mm_ptr)[0] + 1);
 
 				  
-	//		  printf("queue_pair_prepare sq_size = %ld cq_size = %ld, mm_ptr[0] = %04x\n", sq_size, cq_size, ((volatile uint16_t*) ctrl->mm_ptr)[0]);
+			  printf("EMU ** queue_pair_prepare sq_size = %ld cq_size = %ld, mm_ptr[0] = %04x\n", sq_size, cq_size, ((volatile uint16_t*) ctrl->mm_ptr)[0]);
 			  
 			  sq_size = std::min(queueDepth, sq_size);
 			  cq_size = std::min(queueDepth, cq_size);
@@ -126,8 +140,12 @@ struct EmuQueuePair
 			  sq_need_prp = false;//(!cqr) || (sq_size > MAX_SQ_ENTRIES_64K);
 			  cq_need_prp = false;// (!cqr) || (cq_size > MAX_CQ_ENTRIES_64K);
 			
-			  sq_mem_size = sq_size * sizeof(nvm_cmd_t) + sq_need_prp*(64*1024);
-			  cq_mem_size = cq_size * sizeof(nvm_cpl_t) + cq_need_prp*(64*1024);
+			  sq_mem_size = sq_size * sizeof(nvm_cmd_t) + sq_need_prp*(64*1024) ;
+			  cq_mem_size = cq_size * sizeof(nvm_cpl_t) + cq_need_prp*(64*1024) ;
+
+	//		  sq_mem_size = sq_mem_size * 2;
+	//		  cq_mem_size = cq_mem_size * 2;
+			  
 	
 	//		  std::cout << sq_size << "\t" << sq_mem_size << std::endl;
 			//size_t queueMemSize = ctrl.info.page_size * 2;
@@ -440,7 +458,7 @@ inline EmuController::~EmuController()
 //**  Device Code 
 //************************************************************************************************************
 //************************************************************************************************************
-
+#ifdef BAM_USE_BAM_CTRL_QUEUES
 #define EMUQ_GET_HEAD(_q) _q->head.load(simt::memory_order_relaxed)
 #define EMUQ_GET_TAIL(_q) _q->tail.load(simt::memory_order_relaxed)
 #define EMUQ_GET_QS(_q) _q->qs
@@ -450,10 +468,23 @@ inline EmuController::~EmuController()
 #define EMUQ_HEAD_STORE(_q, _v) _q->head.store(_v, simt::memory_order_release)
 #define EMUQ_GET_LAST(_q) _q->last
 #define EMUQ_RING_DB(_q, _v) asm volatile ("st.mmio.relaxed.sys.global.u32 [%0], %1;" :: "l"(_q->db),"r"((uint32_t)_v) : "memory")
+#else
+#define EMUQ_GET_HEAD(_q) _q->head
+#define EMUQ_GET_TAIL(_q) _q->tail
+#define EMUQ_GET_QS(_q) _q->qs
+#define EMUQ_TAIL_INC(_q) _q->tail++
+#define EMUQ_HEAD_INC(_q) _q->head++
+#define EMUQ_TAIL_STORE(_q, _v) _q->tail = _v
+#define EMUQ_HEAD_STORE(_q, _v) _q->head = _v
+#define EMUQ_GET_LAST(_q) _q->last
+#define EMUQ_RING_DB(_q, _v) *((volatile uint32_t*) _q->db) = _v
+#endif
+
+
 
 __device__ static inline void emu_ctrl_nvm_sq_update(nvm_queue_t* pSq)
 {
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_EMU_CTRL);
 
 	EMUQ_HEAD_INC(pSq);
 
@@ -475,7 +506,7 @@ __device__ static inline nvm_cmd_t* emu_ctrl_sq_enqueue(nvm_queue_t* pSq)
 
 {
 	nvm_cmd_t* pCmd;
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_EMU_CTRL);
 	uint16_t tail = EMUQ_GET_TAIL(pSq);
 	
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_ctrl_sq_enqueue(qs = %d head = %d tail = %d)\n", EMUQ_GET_QS(pSq), EMUQ_GET_HEAD(pSq), EMUQ_GET_TAIL(pSq));
@@ -508,7 +539,7 @@ __device__ static inline nvm_cmd_t* emu_ctrl_sq_enqueue(nvm_queue_t* pSq)
 __device__ static inline void emu_ctrl_nvm_sq_submit(nvm_queue_t* pSq)
 {
 
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_EMU_CTRL);
 	uint16_t tail = EMUQ_GET_TAIL(pSq);
 
 	
@@ -525,14 +556,43 @@ __device__ static inline void emu_ctrl_nvm_sq_submit(nvm_queue_t* pSq)
     }
 }
 
-
-__device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_cull(nvm_queue_t* pCq)
+__device__ static inline nvm_cpl_t* emu_ctrl_nvm_walk_and_find_cq_cid(nvm_queue_t* pCq, uint16_t cid)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_INFO, BAM_DBG_CODE_PATH_H_EMU_CTRL);
-    nvm_cpl_t* cpl = (nvm_cpl_t*) (((unsigned char*) pCq->vaddr) + sizeof(nvm_cpl_t) * EMUQ_GET_HEAD(pCq));
+	nvm_cpl_t* cpl;
+
+	for(uint32_t i = 0; i < EMUQ_GET_QS(pCq); i++)
+	{
+		cpl = (nvm_cpl_t*) (((unsigned char*) pCq->vaddr) + sizeof(nvm_cpl_t) * i);
+		uint32_t cpl_entry = cpl->dword[3];
+
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_ctrl_nvm_walk_and_find_cq_cid[%d] cpl = %p cpl_entry = 0x%08x search_cid = %04x\n", i,cpl, cpl_entry, cid);
+
+		if((cpl_entry & 0xFFFF) == cid)
+		{
+			BAM_EMU_DEV_DBG_PRINT2(verbose, "Completion cid = %x found at slot = %d\n", cid, i);
+			break;
+		}
+			
+
+	}
+
+	return cpl;
+}
+
+__device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_poll(nvm_queue_t* pCq)
+{
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_EMU_CTRL);
+	
+	uint16_t head = EMUQ_GET_HEAD(pCq);
+		
+    nvm_cpl_t* cpl = (nvm_cpl_t*) (((unsigned char*) pCq->vaddr) + (sizeof(nvm_cpl_t) * head));
+
+//	nvm_cpl_t* cpl = &((nvm_cpl_t*)pCq->vaddr)[head];
+
+	
 	uint32_t cpl_entry = cpl->dword[3];
 	uint8_t phase = (uint8_t)((cpl_entry & 0x00010000) >> 16);
-	uint16_t head;
 	
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_ctrl_nvm_cq_cull(%p) head = %d phase = %d cpl_entry = %08x\n", pCq,EMUQ_GET_HEAD(pCq), pCq->phase, cpl_entry);
 	
@@ -546,6 +606,35 @@ __device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_cull(nvm_queue_t* pCq)
     }
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_ctrl_nvm_cq_cull(GOOD) cpl = %p cid = 0x%04x\n", cpl, (cpl_entry & 0x0000ffff));
+#if 0
+	EMUQ_HEAD_INC(pCq);
+	head = EMUQ_GET_HEAD(pCq);
+	
+	if(head == EMUQ_GET_QS(pCq))
+	{
+		head = 0;
+		EMUQ_HEAD_STORE(pCq, head);
+
+		pCq->phase = (pCq->phase ? 0 : 1);
+	}
+
+	if(EMUQ_GET_LAST(pCq) != head)
+	{
+		
+		BAM_EMU_DEV_DBG_PRINT1(verbose, "emu_ctrl_nvm_cq_cull() RING CQ DOORBELL = %d\n", head);
+		EMUQ_RING_DB(pCq, head);
+		pCq->last = head;
+
+	}
+#endif
+
+    return cpl;
+}
+
+__device__ static inline void emu_ctrl_nvm_cq_dequeue(nvm_queue_t* pCq)
+{
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_EMU_CTRL);
+	uint16_t head;
 
 	EMUQ_HEAD_INC(pCq);
 	head = EMUQ_GET_HEAD(pCq);
@@ -567,7 +656,6 @@ __device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_cull(nvm_queue_t* pCq)
 
 	}
 
-    return cpl;
 }
 
 

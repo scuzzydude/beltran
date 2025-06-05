@@ -27,13 +27,13 @@ static void emu_lab_log_to_csv(char *filename, Settings *pSettings, double elaps
 	{
 		if(bHeader)
 		{
-			fprintf(fout, "USER_TAG,series,sequence,access,operation,Elaps,iops,bps,QDepth,IoSize,BAM_Requests,BAM_QDepth,BAM_Pages,BAM_Cuda_BlkSize\n");
+			fprintf(fout, "USER_TAG,series,sequence,access,operation,Elaps,iops,bps,QDepth,IoSize,BAM_Requests,BAM_QDepth,BAM_Pages,BAM_Cuda_BlkSize, ios\n");
 		}
 
 		printf("bandwidth2 %f\n", bandwidth * 1000000000.0);	
 		printf("iops2 %f\n", iops);
 
-		fprintf(fout,"%s,%d,%d,%d,%d,%f,%f,%f,%ld,%ld,%ld,%ld,%ld,%ld\n",
+		fprintf(fout,"%s,%d,%d,%d,%ld,%f,%f,%f,%ld,%ld,%ld,%ld,%ld,%ld,%ld\n",
 		pSettings->user_tag,
 		pSettings->series,
 		pSettings->sequence,
@@ -47,7 +47,8 @@ static void emu_lab_log_to_csv(char *filename, Settings *pSettings, double elaps
 		pSettings->numReqs,
 		pSettings->queueDepth,
 		pSettings->numPages,
-		pSettings->blkSize
+		pSettings->blkSize,
+		ios
 		);
 
 

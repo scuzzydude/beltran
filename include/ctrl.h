@@ -232,7 +232,7 @@ inline Controller::Controller(const char* path, uint32_t ns_id, uint32_t cudaDev
     printf("SQs: %d\tCQs: %d\tn_qps: %d queueDepth = %ld\n", n_sqs, n_cqs, n_qps, queueDepth );
     h_qps = (QueuePair**) malloc(h_qp_size);
 
-	printf("h_qps = %p h_qp_size = %ld emulationTarget = %d\n", h_qps, h_qp_size, emulationTarget);
+	printf("h_qps = %p h_qp_size = %ld emulationTarget = %lx\n", h_qps, h_qp_size, emulationTarget);
 	
 	
     cuda_err_chk(cudaMalloc((void**)&d_qps, sizeof(QueuePair)*n_qps));

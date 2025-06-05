@@ -416,8 +416,11 @@ __device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pCon
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_COMP);
 	uint16_t cid = SN_CONTEXT_TAG(pContext);
 	uint32_t		phase = 0x10000;
-		
-	nvm_cpl_t * 	pCmp = & (((nvm_cpl_t *) (pQP->cQ.pEmuQ))[pQP->cQ.tail]);
+
+	BAM_EMU_DEVICE_ASSERT_DBG(pQP->cQ.tail < pQP->cQ.q_size);
+	
+    nvm_cpl_t* pCmp = (nvm_cpl_t*) (((unsigned char*) pQP->cQ.pEmuQ) + (sizeof(nvm_cpl_t) * pQP->cQ.tail));
+//	nvm_cpl_t * 	pCmp = & (((nvm_cpl_t *) (pQP->cQ.pEmuQ))[pQP->cQ.tail]);
 
 
 	if (pQP->cQ.rollover & 0x1)
@@ -1287,13 +1290,13 @@ static int emu_stats_dump(bam_emulated_target_control *pMgtTgtControl, bool bApp
 	int size_needed = pMgtTgtControl->numEmuThreads * sizeof(emu_stats);
 	emu_stats *pLocalStats, *pTxStats;
 
-	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_stats_dump() size_neeeded = %d\n", size_needed);
+	BAM_EMU_HOST_DBG_PRINT(verbose, "emu_stats_dump() size_neeeded = %d, bAppend = %d bSummary = %d bTBD = %d\n", size_needed, bAppend, bSummary, bTBD);
 
 	pLocalStats = (emu_stats *)malloc(size_needed);
 	
 	if(pLocalStats)
 	{
-		int i, j;
+		uint32_t i, j;
 		const char *filename = "basic_stats.csv";
 		bool bHeader = true;
 		FILE *fout;

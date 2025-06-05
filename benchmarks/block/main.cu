@@ -541,7 +541,7 @@ int main(int argc, char** argv) {
 
 
 #ifdef BA_LAB_INFRASTRUCTURE
-		emu_lab_log_to_csv(BA_LAB_LOGFILENAME, &settings, elapsed, iops, bandwidth, ios, data);
+		emu_lab_log_to_csv((char *)((const char *)BA_LAB_LOGFILENAME), &settings, elapsed, iops, bandwidth, ios, data);
 #endif
 #ifdef BAM_EMU_COMPILE 
 		emu_stats_dump(ctrls[0]->pDevTgt_control, true, true, true);

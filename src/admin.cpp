@@ -476,7 +476,7 @@ int nvm_admin_get_num_queues(nvm_aq_ref ref, uint16_t* n_cqs, uint16_t* n_sqs)
     *n_sqs = (completion.dword[0] >> 16) + 1;
     *n_cqs = (completion.dword[0] & 0xffff) + 1;
 
-	printf("Number of Queues 0x%08x sq = %d cq = %d\n", completion.dword[0], *n_sqs, *n_cqs);
+
 
     return NVM_ERR_PACK(NULL, 0);
 }

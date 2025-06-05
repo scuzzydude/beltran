@@ -378,6 +378,13 @@ typedef struct
 	
 } bam_emulated_queue_pair;
 
+
+__device__ inline bam_emulated_queue_pair* get_bam_emulated_queue_pair_from_pvThreadContext(void **ppvThreadContext)
+{
+    return (bam_emulated_queue_pair *)((char *)ppvThreadContext - offsetof(bam_emulated_queue_pair, pvThreadContext));
+}
+
+
 typedef struct 
 {
 
