@@ -302,7 +302,7 @@ int main(int argc, char** argv) {
 
 #ifdef BAM_EMU_USE_DEVICE_CONSTANTS
 	g_host_EmuConstants.clock_rate_khz = properties.clockRate;
-	cudaMemcpyToSymbol((void *)&g_device_EmuConstants, (void *)&g_host_EmuConstants, sizeof(g_host_EmuConstants));	
+	cudaMemcpyToSymbol(g_device_EmuConstants, (void *)&g_host_EmuConstants, sizeof(g_host_EmuConstants));	
 
 #endif
 	
@@ -512,11 +512,11 @@ int main(int argc, char** argv) {
 
 
 #if 1
+        cuda_err_chk(cudaDeviceSynchronize());
 		cudaError_t err = cudaGetLastError();
 		if (err != cudaSuccess) {
 			printf("CUDA error: %s\n", cudaGetErrorString(err));
 		}
-        cuda_err_chk(cudaDeviceSynchronize());
 
 
 #else

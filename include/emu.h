@@ -682,11 +682,12 @@ __device__ inline bam_emulated_queue_pair * emu_tgt_init_QueuePair(bam_emulated_
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT:(%ld) numQueues = %d numEmuThreads = %ld Queues_per_thread =%d\n", tid, pMgtTgtControl->numQueues, pMgtTgtControl->numEmuThreads, *pQueues_per_thread);
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT:(%ld) base_q_idx = %d pQProxy = %p\n", tid, base_q_idx, pQProxy);
 
+#ifndef BAM_EMU_TGT_SIMPLE_MODE_NVME_LOOPBACK
 	if(EMU_MODEL_TYPE_AGGREGATION == pMgtTgtControl->pDevMapper->model.uModelType)
 	{
 		emu_model_agg_set_agg_control_ptr(&pDevQPairs[base_q_idx], pMgtTgtControl->pDevMapper->model.pvDevPrivate, *pQueues_per_thread, base_q_idx);
 	}
-
+#endif
 
 	if(NULL != pQProxy)
 	{
@@ -770,7 +771,6 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	BA_DBG_SET(pMgtTgtControl, 1, 0xBABA0001);
 	
 		
-
 
 	while(pMgtTgtControl->bRun)
 	{

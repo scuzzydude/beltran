@@ -90,8 +90,13 @@ uint32_t emu_model_aggregation_private_init(bam_host_emulator *pEmu, bam_emu_tar
 	pAggModel->ppvHostCtrls = (void **)malloc(sizeof(EmuController *) * num_controllers);
 
 	BAM_EMU_HOST_ASSERT(pAggModel->ppvHostCtrls);
+
+	BAM_EMU_HOST_DBG_PRINT(verbose, "createBuffer Call %d\n", 0);
 	
 	pAggModel->d_ctrls_buff = createBuffer(num_controllers * sizeof(EmuController*), pEmu->cudaDevice);
+
+	BAM_EMU_HOST_DBG_PRINT(verbose, "createBuffer Return %d\n", 0);
+		
 
 	pAggModel->ppvDevCtrls = (void **)pAggModel->d_ctrls_buff.get();
 

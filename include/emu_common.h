@@ -140,7 +140,7 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 	{
 		//TO TURN OFF ALL debug print return 0;
     	return local;
-	//	return BAM_EMU_DBGLVL_ERROR;
+//		return BAM_EMU_DBGLVL_ERROR;
 
 	}
 

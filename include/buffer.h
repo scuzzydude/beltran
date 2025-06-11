@@ -63,6 +63,8 @@ static void getDeviceMemory(int device, void*& bufferPtr, void*& devicePtr, size
     }
     size += 64*1024;
     //std::cout << "DMA Size: "<< size << std::endl;
+
+//	printf("getDeviceMemroy size = %ld\n", size);
     err = cudaMalloc(&bufferPtr, size);
     if (err != cudaSuccess)
     {
@@ -84,11 +86,14 @@ static void getDeviceMemory(int device, void*& bufferPtr, void*& devicePtr, size
         cudaFree(bufferPtr);
         throw error(string("Failed to get pointer attributes: ") + cudaGetErrorString(err));
     }
+//	printf("getDeviceMemroy origPtr = %p\n", origPtr);
 
     origPtr = bufferPtr;
     //devicePtr = (void*) (((uint64_t)attrs.devicePointer));
     devicePtr = (void*) ((((uint64_t)attrs.devicePointer) + (64*1024)) & 0xffffffffff0000);
     bufferPtr = (void*) ((((uint64_t)bufferPtr) + (64*1024))  & 0xffffffffff0000);
+	
+//	printf("getDeviceMemroy bufferPtr = %p\n", bufferPtr);
 }
 
 static void getDeviceMemory2(int device, void*& bufferPtr, size_t size, void*& origPtr)
@@ -96,17 +101,23 @@ static void getDeviceMemory2(int device, void*& bufferPtr, size_t size, void*& o
     bufferPtr = nullptr;
     //devicePtr = nullptr;
     size += 128;
+//	printf("getDeviceMemroy2 size = %ld\n", size);
+	
     cudaError_t err = cudaSetDevice(device);
     if (err != cudaSuccess)
     {
         throw error(string("Failed to set CUDA device: ") + cudaGetErrorString(err));
     }
+
+//	printf("getDeviceMemroy2 malloc = %p\n", &bufferPtr);
     err = cudaMalloc(&bufferPtr, size);
     if (err != cudaSuccess)
     {
         throw error(string("Failed to allocate device memory: ") + cudaGetErrorString(err));
     }
 
+//	printf("getDeviceMemroy2 memset = %p\n", bufferPtr);
+	
     err = cudaMemset(bufferPtr, 0, size);
     if (err != cudaSuccess)
     {
@@ -124,8 +135,13 @@ static void getDeviceMemory2(int device, void*& bufferPtr, size_t size, void*& o
 
     devicePtr = (void*) (((uint64_t)attrs.devicePointer));
 */
+//	printf("getDeviceMemroy2 origPtr = %p\n", bufferPtr);
+
     origPtr = bufferPtr;
     bufferPtr = (void*) ((((uint64_t)bufferPtr) + (128))  & 0xffffffffffffe0);
+
+//	printf("getDeviceMemroy2 bufferPtr = %p\n", bufferPtr);
+
     //std::cout << "getdeviceMemory: " << std::hex << bufferPtr <<  std::endl;
 }
 
