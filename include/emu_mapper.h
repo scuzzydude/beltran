@@ -127,7 +127,7 @@ __device__ inline int emu_tgt_map_model_submit(bam_emu_mapper *pDevMapper, stora
 			return emu_model_vendor_submit(&pDevMapper->model, pContext, ppvThreadContext);
 
 		default:
-		BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_map_model_submit() : Invalid Model Type %d\n", pDevMapper->model.uModelType);
+			BAM_EMU_DEV_DBG_PRINT1(BAM_EMU_DBGLVL_ERROR, "emu_tgt_map_model_submit() : Invalid Model Type %d\n", pDevMapper->model.uModelType);
 		break;
 		
 	}

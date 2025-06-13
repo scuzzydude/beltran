@@ -570,7 +570,7 @@ __device__ static inline nvm_cpl_t* emu_ctrl_nvm_walk_and_find_cq_cid(nvm_queue_
 
 		if((cpl_entry & 0xFFFF) == cid)
 		{
-			BAM_EMU_DEV_DBG_PRINT2(verbose, "Completion cid = %x found at slot = %d\n", cid, i);
+			BAM_EMU_DEV_DBG_PRINT3(verbose, "Completion cid = %x found at slot = %d dword[2] = %08x\n", cid, i, cpl->dword[2]);
 			break;
 		}
 			

@@ -7,7 +7,7 @@
 #define EMU_STATS_LVL_HISTORGRAM 3
 #define EMU_STATS_LVL_VENDOR     4
 
-#define EMU_STATS_LEVEL EMU_STATS_LVL_BASIC
+#define EMU_STATS_LEVEL EMU_STATS_LVL_NONE
 
 
 //Macro Magic Trickery, add standard uint64_t stats in this list 

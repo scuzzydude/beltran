@@ -456,6 +456,7 @@ int main(int argc, char** argv) {
         {
 			//std::cout << "calling random_access_kernel" << std::endl;
 			//printf("calling random_access_kernel <<< %d, %d, %d, %p>>>\n", g_size, b_size, ctrls[0]->pEmu->shared_size, ctrls[0]->pEmu->tgt.bamStream);
+
 			
             random_access_kernel<<<g_size, b_size, ctrls[0]->pEmu->shared_size>>>(h_pc.pdt.d_ctrls, d_pc, page_size, n_threads, d_req_count, settings.n_ctrls, d_assignment, settings.numReqs, settings.accessType, d_access_assignment);
         }
