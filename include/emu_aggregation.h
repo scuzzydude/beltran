@@ -400,7 +400,7 @@ __device__ inline int emu_model_agg_sq_enqueue(emu_aggregation_model *pAggModel,
 		
 
 #pragma unroll
-		for (uint32_t i = 0; i < 64 / sizeof(agg_copy_type); i++) 
+		for (uint32_t i = 0; i < (64 / sizeof(agg_copy_type)); i++) 
 		{
 			queue_loc[i] = cmd_loc[i];
 		}
@@ -416,6 +416,7 @@ __device__ inline int emu_model_agg_sq_enqueue(emu_aggregation_model *pAggModel,
 	}
 	else
 	{
+		BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "sq_enqueue(%d, %d) QFULL!!!! \n", cidx, qidx);
 		return EMU_SUBMIT_QFULL;
 	}
 
@@ -467,7 +468,7 @@ __device__ inline storage_next_emuluator_context * emu_model_aggregation_cull(ba
 	//We only need this to keep a list for error handling	
 	//**ppLatListHead = (latency_context **) ppvThreadContext;
 	//storage_next_emuluator_context *pTemp;
-	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_LATENCY);
+	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_AGG);
 	EmuController *pCtrl;
 	EmuQueuePair *pQP;
 	agg_queue_control* pAqc = emu_model_agg_aqc(ppvThreadContext, 0);

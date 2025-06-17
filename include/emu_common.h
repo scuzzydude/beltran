@@ -13,7 +13,7 @@
 //no reason this can't be 64K, just need to massage some stuff
 #define BAM_EMU_MAX_QUEUES 1024
 
-#define	KERNEL_DBG_ARRAY
+//#define	KERNEL_DBG_ARRAY
 
 #ifdef KERNEL_DBG_ARRAY
 #define BA_DBG_SET(__p, __idx, __val) if(0 == (blockIdx.x * blockDim.x + threadIdx.x))  __p->debugA[__idx] = __val 
