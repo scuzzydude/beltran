@@ -190,7 +190,7 @@ __device__ inline int emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTgt
 		
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Process(%d) ioaddr = %p\n", pQP->q_number, (void *)pQP->sQ.ioaddr);
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Process() slot_count = %d src_addr = %p\n", slot_count, src_addr);
-		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Process() copy_size = %d dst_addr = %p\n", copy_size, dst_addr);
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT: emu_tgt_SQ_Process() copy_size = %d src_addr = %p dst_addr = %p db_tail = %d\n", copy_size, src_addr, dst_addr, db_tail);
 
 		emu_tgt_DMA(dst_addr, src_addr, copy_size, BAM_EMU_DATA_IN);
 
@@ -198,6 +198,7 @@ __device__ inline int emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTgt
 	}
 	else if(db_tail < pQP->sQ.tail)
 	{
+		int total_copy_size;
 		int slot_count2 = db_tail;
 		slot_count = (pQP->sQ.q_size_minus_1 - db_tail);
 		
@@ -206,6 +207,8 @@ __device__ inline int emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTgt
 		src_addr = (void *)&(((nvm_cmd_t *)(pQP->sQ.ioaddr))[pQP->sQ.tail]);
 		dst_addr = (void *)&(((nvm_cmd_t *)(pQP->sQ.pEmuQ))[pQP->sQ.tail]);
 		copy_size  = slot_count * sizeof(nvm_cmd_t);	
+
+		total_copy_size = copy_size;
 
 		BAM_EMU_DEVICE_ASSERT_DBG(pQP->sQ.tail < pQP->sQ.q_size);
 		BAM_EMU_DEVICE_ASSERT_DBG(slot_count < pQP->sQ.q_size);
@@ -218,12 +221,15 @@ __device__ inline int emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTgt
 		src_addr = (void *)&(((nvm_cmd_t *)(pQP->sQ.ioaddr))[0]);
 		dst_addr = (void *)&(((nvm_cmd_t *)(pQP->sQ.pEmuQ))[0]);
 
+		total_copy_size += copy_size;	
+
 		BAM_EMU_DEVICE_ASSERT_DBG(slot_count2 < pQP->sQ.q_size);
 		BAM_EMU_DEVICE_ASSERT_DBG(copy_size < (pQP->sQ.q_size * sizeof(nvm_cmd_t)));
 
-		BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_SQ_Process() Split-DMA2 copy_size = %d src_addr = %p dst_addr = %p\n", copy_size, src_addr, dst_addr );
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT: emu_tgt_SQ_Process() Split-DMA2 copy_size = %d src_addr = %p dst_addr = %p total_copy_size = %d\n", copy_size, src_addr, dst_addr, total_copy_size );
 		emu_tgt_DMA(dst_addr, src_addr, copy_size, BAM_EMU_DATA_IN);
 
+//		BAM_EMU_DEVICE_ASSERT_DBG(total_copy_size)
 
 	}
 
@@ -241,7 +247,10 @@ __device__ inline int emu_tgt_SQ_Process(bam_emulated_target_control    *pMgtTgt
 	return slot_count;
 
 }
-__device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtControl, bam_emulated_queue_pair *pQP, uint32_t cq_db_head)
+
+#define CQ_DRAIN_HEAD_FIX
+
+__device__ inline int emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtControl, bam_emulated_queue_pair *pQP, uint32_t cq_db_head)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_CQ_DRAIN);
 	int slot_count;
@@ -255,10 +264,21 @@ __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtCont
 	BAM_EMU_DEVICE_ASSERT_DBG(cq_db_head < pQP->cQ.q_size);
 
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_CQ_Drain() CALL cq_db_head = %d cq_tail = %d\n", cq_db_head, pQP->cQ.tail);
+#ifdef CQ_DRAIN_HEAD_FIX
+	 if(pQP->cQ.head == cq_db_head)
+	 {
+	 	 //because head != tail, there is NO "legal" chance of direct rollover without a DMA
+	 	 //In a 1024 deep queue, at most 1023 entries can be be consumed...
+		 BAM_EMU_DEV_DBG_PRINT4(BAM_EMU_DBGLVL_INFO, "TGT: emu_tgt_CQ_Drain(%d) WAIT_HEAD_MOVE  head = %d cq_db_head = %d cq_tail = %d\n", pQP->q_number,   pQP->cQ.head, cq_db_head, pQP->cQ.tail);
+		 return EMU_WAIT_CQHEAD;
+	 }
+	 else
+#endif
 
 	if(cq_db_head == pQP->cQ.tail)
 	{
-		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_CQ_Drain() EMPTY QUEUE cq_db_head = %d cq_tail = %d\n", cq_db_head, pQP->cQ.tail);
+		BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_INFO, "TGT: emu_tgt_CQ_Drain() EMPTY QUEUE cq_db_head = %d cq_tail = %d\n", cq_db_head, pQP->cQ.tail);
+		return EMU_CQ_EMPTY;
 	}
 	else if(cq_db_head < pQP->cQ.tail)
 	{
@@ -276,7 +296,7 @@ __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtCont
 
 
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_CQ_Drain() slot_count = %d src_addr = %p\n", slot_count, src_addr);
-		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_CQ_Drain() copy_size = %d dst_addr = %p\n", copy_size, dst_addr);
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT: emu_tgt_CQ_Drain() copy_size = %d src_addr = %p dst_addr = %p cq_db_head =%d\n", copy_size, src_addr, dst_addr, cq_db_head);
 
 		emu_tgt_DMA(dst_addr, src_addr, copy_size, BAM_EMU_DATA_OUT);
 
@@ -284,18 +304,20 @@ __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtCont
 	else 
 	{
 		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_CQ_Drain() Split-DMA cq_db_head = %d cq_tail = %d\n", cq_db_head, pQP->cQ.tail);
-
+		int total_copy_size;
 		slot_count =  (pQP->cQ.q_size - cq_db_head);
 		dst_addr = (void *)&(((nvm_cpl_t *)(pQP->cQ.ioaddr))[cq_db_head]);
 		src_addr = (void *)&(((nvm_cpl_t *)(pQP->cQ.pEmuQ))[cq_db_head]);
 		copy_size  = slot_count * sizeof(nvm_cpl_t);	
 
+		total_copy_size = copy_size;
+		
 		BAM_EMU_DEVICE_ASSERT_DBG(cq_db_head < pQP->cQ.q_size);
 		BAM_EMU_DEVICE_ASSERT_DBG(slot_count < pQP->cQ.q_size);
 		BAM_EMU_DEVICE_ASSERT_DBG(copy_size < (pQP->cQ.q_size * sizeof(nvm_cpl_t)));
 
 
-		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_CQ_Drain() DMA1 slot_count = %d src_addr = %p\n", slot_count, src_addr);
+		BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_CQ_Drain() DMA1 slot_count = %d src_addr = %p dst_addr = %p\n", slot_count, src_addr, dst_addr);
 		emu_tgt_DMA(dst_addr, src_addr, copy_size, BAM_EMU_DATA_OUT);
 
 		slot_count =  (pQP->cQ.tail);
@@ -303,16 +325,20 @@ __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtCont
 		src_addr = (void *)&(((nvm_cpl_t *)(pQP->cQ.pEmuQ))[0]);
 		copy_size  = slot_count * sizeof(nvm_cpl_t);	
 
+		total_copy_size += copy_size;
+		
 		BAM_EMU_DEVICE_ASSERT_DBG(slot_count < pQP->cQ.q_size);
 		BAM_EMU_DEVICE_ASSERT_DBG(copy_size < (pQP->cQ.q_size * sizeof(nvm_cpl_t)));
 
 
-		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_CQ_Drain() DMA2 slot_count = %d src_addr = %p\n", slot_count, src_addr);
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT: emu_tgt_CQ_Drain() DMA2 slot_count = %d src_addr = %p dst_addr = %p total_copy_size = %d\n", slot_count, src_addr, dst_addr, total_copy_size);
 		emu_tgt_DMA(dst_addr, src_addr, copy_size, BAM_EMU_DATA_OUT);
 
 
 	}
-
+#ifdef CQ_DRAIN_HEAD_FIX
+	pQP->cQ.head = cq_db_head;
+#endif
 	
 	//debug 
 	if(0)
@@ -329,6 +355,7 @@ __device__ inline void emu_tgt_CQ_Drain(bam_emulated_target_control *pMgtTgtCont
 		BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT: emu_tgt_CQ_Drain(src) dw3(0..4) 0x%08x 0x%08x 0x%08x 0x%08x\n", pDw[3], pDw[7], pDw[11], pDw[15]);
 
 	}
+	return EMU_SUBMIT_GOOD;
 	
 }
 
@@ -429,17 +456,24 @@ __device__ inline int emu_tgt_NVMe_execute(bam_emulated_target_control    *pMgtT
 {
 	uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_EXE);
-
+	int err;
+	
 	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
 	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
 	BAM_EMU_DEVICE_ASSERT_DBG(pContext);
 
 
 	EMU_STATS_BASIC_INC(pMgtTgtControl, BasicStatRequest);
+
 	
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: emu_tgt_NVMe_execute(%ld) call emu_tgt_map_Submit(%p, %p)\n", tid, pMgtTgtControl->pDevMapper, pContext);
 
-	return emu_tgt_map_Submit(pMgtTgtControl->pDevMapper, pContext, &pQP->pvThreadContext);
+	err = emu_tgt_map_Submit(pMgtTgtControl->pDevMapper, pContext, &pQP->pvThreadContext);
+
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "TGT: _NVMe_execute(%d) CID=0x%04x err = %d\n", pQP->q_number, ((nvm_cmd_t *)pContext->pCmd)->dword[0] >> 16, err);
+		
+	return err;
+	
 }
 #endif
 
@@ -466,18 +500,12 @@ __device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pCon
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_tgt_NVMe_Complete() cid = 0x%04x cq_tail = %d rollover = %d\n", cid,
 				 pQP->cQ.tail, pQP->cQ.rollover);
 
-
 	pCmp->dword[0]		= 0;
 	pCmp->dword[1]		= 0;
 	pCmp->dword[2]		= ((uint32_t) pQP->q_number << 16) | (pQP->sQ.head);
 	pCmp->dword[3]		= phase | cid;
 
-
 	BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_tgt_NVMe_Complete(%d) cid = 0x%04x pCmp = %p pEmuQ = %p\n", pQP->q_number, cid, pCmp, pQP->cQ.pEmuQ);
-
-
-
-
 
 	BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_tgt_NVMe_Complete() %p val[2] = %x val[3] = %x\n", &pCmp->dword[2],
 				 pCmp->dword[2], pCmp->dword[3]);
@@ -493,7 +521,8 @@ __device__ inline int emu_tgt_NVMe_Complete(storage_next_emuluator_context *pCon
 	}
 
 	EMU_STATS_BASIC_INC(pMgtTgtControl, BasicStatResponse);
-		
+	
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "TGT: _NVMe_Complete(%d) CID=0x%04x tail = %d rollover = %d\n", pQP->q_number, cid, pQP->cQ.tail, pQP->cQ.rollover);
 
 	return 0;
 	
@@ -506,7 +535,7 @@ __device__ inline uint32_t emu_CQ_Ready(bam_emulated_queue_pair      *pQP, uint3
 	
 	if (cq_db_head != (pQP->cQ.tail + 1))
 	{
-		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT:emu_CQ_Ready() NOT_READY cq_db_head = %d tail = %d\n", cq_db_head, pQP->cQ.tail);
+		BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT:emu_CQ_Ready() READY cq_db_head = %d tail = %d\n", cq_db_head, pQP->cQ.tail);
 
 		return 1;
 	}
@@ -529,6 +558,12 @@ __device__ inline uint32_t emu_tgt_Cull(bam_emulated_target_control    *pMgtTgtC
 	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
 	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
 
+
+#ifdef CQ_DRAIN_HEAD_FIX
+	cq_db_head = emu_tgt_read_doorbell(&pQP->cQ);
+
+	BAM_EMU_DEVICE_ASSERT_DBG(cq_db_head < pQP->cQ.q_size);
+#endif
 
 	
 	BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_Cull() pMgtTgtControl = %p pvThreadContext = %p\n", pMgtTgtControl, pQP->pvThreadContext);
@@ -556,12 +591,42 @@ __device__ inline uint32_t emu_tgt_Cull(bam_emulated_target_control    *pMgtTgtC
 			break;
 		}
 	}
+#ifdef CQ_DRAIN_HEAD_FIX
+	if(count)
+	{
 
+		if(emu_tgt_CQ_Drain(pMgtTgtControl, pQP, cq_db_head))
+		{	
+			unsigned int ns = 8;		
+			const unsigned int retries = 8;
+			unsigned int rc = 0; 
+			do
+			{
+
+				if(rc > retries)
+				{
+					BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_INFO, "TGT: TIMEOUT!!! CQ DRAIN (%d)  count = %d ns = %d \n", pQP->q_number, rc, ns);
+					BAM_EMU_DEVICE_ASSERT(0);
+				}
+				BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_INFO, "TGT: WAITING CQ DRAIN (%d)  count = %d ns = %d \n", pQP->q_number, rc, ns);
+
+				__nanosleep(ns);
+
+				rc++;
+
+				ns = ns * 2;
+
+				cq_db_head = emu_tgt_read_doorbell(&pQP->cQ);
+
+			} while(emu_tgt_CQ_Drain(pMgtTgtControl, pQP, cq_db_head));
+		}
+	}
+#endif
 	return count;
 	
 }
 
-
+//#define MAX_NVME_BATCH_SUBMIT 64
 __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *pMgtTgtControl, bam_emulated_queue_pair     *pQP, uint32_t *pSubmit_count)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_NVME_SUB);
@@ -629,7 +694,16 @@ __device__ inline uint32_t emu_tgt_NVMe_Submit(bam_emulated_target_control    *p
 			}
 			count++;
 		}
-	
+
+#ifdef MAX_NVME_BATCH_SUBMIT
+		if(MAX_NVME_BATCH_SUBMIT)
+		{
+			if(count >= MAX_NVME_BATCH_SUBMIT)
+			{
+				break;
+			}
+		}	
+#endif
 
 	}
 
@@ -646,8 +720,7 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_D_SQ_CHECK);
 	uint32_t db_tail;
-	nvm_cmd_t* pCmd;
-
+	
 	BAM_EMU_DEVICE_ASSERT_DBG(pQP);
 	BAM_EMU_DEVICE_ASSERT_DBG(pMgtTgtControl);
 	
@@ -669,15 +742,10 @@ __device__ inline int emu_tgt_SQ_Check(bam_emulated_target_control    *pMgtTgtCo
 			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check(%d) ENABLED size = %d\n", q_number, pQP->sQ.q_size);
 			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check(%p) %d \n", (void *)pQP->sQ.ioaddr, q_number);
 
-			/* Stale... not sure what I was doing here 
-    		pCmd = (nvm_cmd_t *)pQP->sQ.ioaddr;
-
-			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check() cmd[0] = 0x%08x cmd[1] = 0x%08x \n", pCmd->dword[0], pCmd->dword[1]);
-			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check() db = %p  db = %p \n", pQP->cQ.db, pQP->sQ.db);
-			*/
 
 			db_tail = emu_tgt_read_doorbell(&pQP->sQ);
-			
+
+			BAM_EMU_DEVICE_ASSERT_DBG(db_tail < pQP->sQ.q_size);
 				
 			BAM_EMU_DEV_DBG_PRINT2(verbose, "TGT: emu_tgt_SQ_Check() db = %d	head = %d \n",  db_tail, pQP->sQ.head);
 
@@ -826,12 +894,13 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	BA_DBG_SET(pMgtTgtControl, 1, 0xBABA0001);
 	
 		
+	pQP = &pDevQPairs[tid];
 
 	while(pMgtTgtControl->bRun)
 	{
 		uint32_t submit_count;
 #if 1
-		pQP = &pDevQPairs[tid];
+//		pQP = &pDevQPairs[tid];
 #else
 		pQP = emu_tgt_get_QueuePair(pDevQPairs, pRegQp, queues_per_thread, count, base_q_idx);
 #endif
@@ -845,7 +914,11 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 
 			if(submit_count)
 			{
+#ifdef CQ_DRAIN_HEAD_FIX
+
+#else
 				emu_tgt_CQ_Drain(pMgtTgtControl, pQP, cq_db_head);
+#endif
 			}
 		}
 #else
@@ -859,7 +932,11 @@ EMU_KERNEL_ENTRY_TYPE void kernel_Emulator(bam_emulated_target_control    *pMgtT
 	
 			if(emu_tgt_Cull(pMgtTgtControl, pQP, cq_db_head))
 			{
+#ifdef CQ_DRAIN_HEAD_FIX
+
+#else
 				emu_tgt_CQ_Drain(pMgtTgtControl, pQP, cq_db_head);
+#endif
 			}
 
 
@@ -906,6 +983,8 @@ static void emulator_update_d_queue(bam_host_emulator *pEmu,  uint16_t q_number,
 		if(pEmu->tgt.queuePairs[q_idx].cQ.enabled)
 		{
 			BAM_EMU_HOST_DBG_PRINT(verbose, "emulator_update_d_queue() q_idx = %d BOTH Qs ENABLED, UPDATING\n", q_idx);
+
+			pEmu->tgt.queuePairs[q_idx].cQ.head = 1;
 
 			pEmu->tgt.queuePairs[q_idx].qp_enabled = bEnable;
 			pEmu->tgt.queuePairs[q_idx].q_number = q_number;

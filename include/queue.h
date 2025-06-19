@@ -62,12 +62,16 @@ struct QueuePair
 
 #define MAX_SQ_ENTRIES_64K  (64*1024/64)
 #define MAX_CQ_ENTRIES_64K  (64*1024/16)
+#define MAX_CID 65536
+//#define MAX_CID 4096
+
+
 
     inline void init_gpu_specific_struct( const uint32_t cudaDevice) {
         this->sq_tickets = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
         //this->sq_head_mark = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
         this->sq_tail_mark = createBuffer(this->sq.qs * sizeof(padded_struct), cudaDevice);
-        this->sq_cid = createBuffer(65536 * sizeof(padded_struct), cudaDevice);
+        this->sq_cid = createBuffer(MAX_CID * sizeof(padded_struct), cudaDevice);
         this->sq.tickets = (padded_struct*) this->sq_tickets.get();
         //this->sq.head_mark = (padded_struct*) this->sq_head_mark.get();
         this->sq.tail_mark = (padded_struct*) this->sq_tail_mark.get();

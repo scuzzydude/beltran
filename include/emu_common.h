@@ -193,8 +193,8 @@ __host__ __device__ static inline int bam_get_verbosity(int local, uint64_t code
 #define EMU_DB_MEM_ATOMIC_MANAGED     2  
 #define EMU_DB_MEM_ATOMIC_DEVICE      3
 
-//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
-#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
+#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_MAPPED_FILE
+//#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_MANAGED
 //#define BAM_EMU_DOORBELL_TYPE         EMU_DB_MEM_ATOMIC_DEVICE
 
 
@@ -471,7 +471,8 @@ typedef struct
 
 #define EMU_SUBMIT_GOOD  0
 #define EMU_SUBMIT_QFULL 1 
-
+#define EMU_WAIT_CQHEAD  2
+#define EMU_CQ_EMPTY     3 
 
 
 //#define BAM_EMU_QTHREAD_ONE_SHOT

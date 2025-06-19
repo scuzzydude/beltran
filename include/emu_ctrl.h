@@ -502,6 +502,10 @@ __device__ static inline void emu_ctrl_nvm_sq_update(nvm_queue_t* pSq)
 }
 		
 
+__device__ static inline uint16_t emu_ctrl_nvm_get_sq_tail(nvm_queue_t* pSq)
+{
+	return EMUQ_GET_TAIL(pSq);
+}
 __device__ static inline nvm_cmd_t* emu_ctrl_sq_enqueue(nvm_queue_t* pSq)
 
 {
@@ -513,7 +517,7 @@ __device__ static inline nvm_cmd_t* emu_ctrl_sq_enqueue(nvm_queue_t* pSq)
 	
 	if ((uint16_t) ((tail - EMUQ_GET_HEAD(pSq)) % EMUQ_GET_QS(pSq)) == (EMUQ_GET_QS(pSq) - 1))
 	{
-		BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_ctrl_sq_enqueue(qs = %d head = %d tail = %d) QFULL!!!!\n", EMUQ_GET_QS(pSq), EMUQ_GET_HEAD(pSq), EMUQ_GET_TAIL(pSq));
+		BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_INFO, "emu_ctrl_sq_enqueue(qs = %d head = %d tail = %d) QFULL!!!!\n", EMUQ_GET_QS(pSq), EMUQ_GET_HEAD(pSq), EMUQ_GET_TAIL(pSq));
 
 		return NULL;
 	}
@@ -554,6 +558,11 @@ __device__ static inline void emu_ctrl_nvm_sq_submit(nvm_queue_t* pSq)
 
         pSq->last = tail;
     }
+	else
+	{
+		BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_INFO, "QFULL!!! emu_ctrl_nvm_sq_submit(qs = %d last = %d tail = %d) \n", EMUQ_GET_QS(pSq), EMUQ_GET_LAST(pSq), tail);
+		BAM_EMU_DEVICE_ASSERT_DBG(0);
+	}
 }
 
 __device__ static inline nvm_cpl_t* emu_ctrl_nvm_walk_and_find_cq_cid(nvm_queue_t* pCq, uint16_t cid)
@@ -566,12 +575,11 @@ __device__ static inline nvm_cpl_t* emu_ctrl_nvm_walk_and_find_cq_cid(nvm_queue_
 		cpl = (nvm_cpl_t*) (((unsigned char*) pCq->vaddr) + sizeof(nvm_cpl_t) * i);
 		uint32_t cpl_entry = cpl->dword[3];
 
-		BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_ctrl_nvm_walk_and_find_cq_cid[%d] cpl = %p cpl_entry = 0x%08x search_cid = %04x\n", i,cpl, cpl_entry, cid);
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_ctrl_nvm_walk_and_find_cq_cid[%d] cpl = %p cpl_entry = 0x%08x dword[2] = %08x\n", i,cpl, cpl_entry, cpl->dword[2]);
 
 		if((cpl_entry & 0xFFFF) == cid)
 		{
-			BAM_EMU_DEV_DBG_PRINT3(verbose, "Completion cid = %x found at slot = %d dword[2] = %08x\n", cid, i, cpl->dword[2]);
-			break;
+			BAM_EMU_DEV_DBG_PRINT4(verbose, "Completion cid = %x found at slot = %d dword[2] = %08x head = 0x%04x ******\n", cid, i, cpl->dword[2], EMUQ_GET_HEAD(pCq));
 		}
 			
 
@@ -580,12 +588,20 @@ __device__ static inline nvm_cpl_t* emu_ctrl_nvm_walk_and_find_cq_cid(nvm_queue_
 	return cpl;
 }
 
+
+__device__ static inline uint16_t emu_ctrl_nvm_get_cq_head(nvm_queue_t* pCq)
+{
+	return EMUQ_GET_HEAD(pCq);
+}
+
 __device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_poll(nvm_queue_t* pCq)
 {
 	int verbose = bam_get_verbosity(BAM_EMU_DBGLVL_NONE, BAM_DBG_CODE_PATH_H_EMU_CTRL);
 	
 	uint16_t head = EMUQ_GET_HEAD(pCq);
-		
+
+	BAM_EMU_DEVICE_ASSERT_DBG(head < pCq->qs);
+	
     nvm_cpl_t* cpl = (nvm_cpl_t*) (((unsigned char*) pCq->vaddr) + (sizeof(nvm_cpl_t) * head));
 
 //	nvm_cpl_t* cpl = &((nvm_cpl_t*)pCq->vaddr)[head];
@@ -605,28 +621,8 @@ __device__ static inline nvm_cpl_t* emu_ctrl_nvm_cq_poll(nvm_queue_t* pCq)
 		return NULL;
     }
 
-	BAM_EMU_DEV_DBG_PRINT2(verbose, "emu_ctrl_nvm_cq_cull(GOOD) cpl = %p cid = 0x%04x\n", cpl, (cpl_entry & 0x0000ffff));
-#if 0
-	EMUQ_HEAD_INC(pCq);
-	head = EMUQ_GET_HEAD(pCq);
-	
-	if(head == EMUQ_GET_QS(pCq))
-	{
-		head = 0;
-		EMUQ_HEAD_STORE(pCq, head);
+	BAM_EMU_DEV_DBG_PRINT4(verbose, "cq_poll(%d) cpl_entry = 0x%08x cid = 0x%04x head = %04x \n", pCq->no, cpl_entry, (cpl_entry & 0x0000ffff), head);
 
-		pCq->phase = (pCq->phase ? 0 : 1);
-	}
-
-	if(EMUQ_GET_LAST(pCq) != head)
-	{
-		
-		BAM_EMU_DEV_DBG_PRINT1(verbose, "emu_ctrl_nvm_cq_cull() RING CQ DOORBELL = %d\n", head);
-		EMUQ_RING_DB(pCq, head);
-		pCq->last = head;
-
-	}
-#endif
 
     return cpl;
 }
@@ -638,7 +634,7 @@ __device__ static inline void emu_ctrl_nvm_cq_dequeue(nvm_queue_t* pCq)
 
 	EMUQ_HEAD_INC(pCq);
 	head = EMUQ_GET_HEAD(pCq);
-	
+
 	if(head == EMUQ_GET_QS(pCq))
 	{
 		head = 0;

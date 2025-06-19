@@ -30,6 +30,8 @@ __forceinline__ __device__ uint64_t get_id(uint64_t x, uint64_t y) {
     return (x >> y) * 2;  // (x/2^y) *2
 }
 
+#define NPQ_MAX_CID 0xFFFF
+
 
 
 inline __device__
@@ -38,7 +40,7 @@ uint16_t get_cid(nvm_queue_t* sq) {
     uint16_t id;
 
     do {
-        id = sq->cid_ticket.fetch_add(1, simt::memory_order_relaxed) & (65535);
+        id = sq->cid_ticket.fetch_add(1, simt::memory_order_relaxed) & (NPQ_MAX_CID);
         //printf("in thread: %p\n", (void*) ((sq->cid)+id));
         uint64_t old = sq->cid[id].val.fetch_or(LOCKED, simt::memory_order_acquire);
         not_found = old == LOCKED;

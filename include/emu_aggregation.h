@@ -57,7 +57,13 @@ typedef struct
 	uint32_t     qidx;
 	uint32_t     r1;
 #ifdef AGG_Q_CONTROL_IDX_ARRAY
-	agg_context *aggidx[AGG_Q_CONTROL_IDX_ARRAY];	
+//#define AGG_Q_CNT_CNT
+
+	agg_context *aggidx[AGG_Q_CONTROL_IDX_ARRAY];
+#ifdef AGG_Q_CNT_CNT
+	uint8_t      req[AGG_Q_CONTROL_IDX_ARRAY];
+//	uint8_t      resp[AGG_Q_CONTROL_IDX_ARRAY];
+#endif	
 #endif
 
 } agg_queue_control;
@@ -191,6 +197,9 @@ __device__ void add_agg_context_tail(agg_queue_control *queue, agg_context *newN
 	BAM_EMU_DEVICE_ASSERT_DBG(newNode);
 	
 	queue->aggidx[newNode->agg_context.cid] = newNode; 
+#ifdef AGG_Q_CNT_CNT
+	queue->req[newNode->agg_context.cid]++;
+#endif
 
 	
 }
@@ -204,7 +213,13 @@ __device__ agg_context* find_and_remove_agg_context_by_cid(agg_queue_control *qu
 	{
 		queue->aggidx[cid] = NULL;
 
+#ifdef AGG_Q_CNT_CNT
+			queue->req[cid]++;
+#endif
+
 	}
+
+
 
 	return pAgg;
 }
@@ -218,15 +233,18 @@ __device__ void add_agg_context_tail(agg_queue_control *queue, agg_context *newN
     BAM_EMU_DEVICE_ASSERT_DBG(queue);
 	BAM_EMU_DEVICE_ASSERT_DBG(newNode);
 	
-	BAM_EMU_DEV_DBG_PRINT2(verbose, "add_agg_context_tail() idx = %d cid = %x\n", queue->qidx, newNode->agg_context.cid);
+	BAM_EMU_DEV_DBG_PRINT3(verbose, "add_agg_context_tail() idx = %d cid = %x count = %d\n", queue->qidx, newNode->agg_context.cid, queue->count);
 
     newNode->agg_context.pNext = NULL;
     newNode->agg_context.pPrev = NULL;
 
-    if (queue->pTail == NULL) {
+    if (queue->pTail == NULL) 
+	{
         // List is empty
         queue->pHead = queue->pTail = newNode;
-    } else {
+    } 
+	else 
+    {
         // Append to tail
         newNode->agg_context.pPrev = queue->pTail;
         queue->pTail->agg_context.pNext = newNode;
@@ -273,7 +291,7 @@ __device__ agg_context* find_and_remove_agg_context_by_cid(agg_queue_control *qu
 				BAM_EMU_DEVICE_ASSERT_DBG(0);
 			}
 
-			BAM_EMU_DEV_DBG_PRINT2(verbose, "remove_agg() idx = %d cid = %x\n", queue->qidx, curr->agg_context.cid);
+			BAM_EMU_DEV_DBG_PRINT3(verbose, "remove_agg() qidx = %d cid = %x count = %d\n", queue->qidx, curr->agg_context.cid, queue->count);
 						
 			
             return curr;
@@ -379,7 +397,7 @@ __device__ inline int emu_model_agg_sq_enqueue(emu_aggregation_model *pAggModel,
 	EmuController *pCtrl;
 	EmuQueuePair *pQP;
 	nvm_cmd_t *pCmd;
-	bool    bRingDoorbell = true;
+	const bool    bRingDoorbell = true;
 	
 	pCtrl = (EmuController *)pAggModel->ppvDevCtrls[cidx];
 
@@ -405,12 +423,12 @@ __device__ inline int emu_model_agg_sq_enqueue(emu_aggregation_model *pAggModel,
 			queue_loc[i] = cmd_loc[i];
 		}
 
-		BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_model_agg_sq_enqueue(pCmd=%p dword[0] = 0x%08x cid = 0x%04x)\n", pCmd, pCmd->dword[0], ((pCmd->dword[0] >> 16) & 0xFFFF));
 
 		if(bRingDoorbell)
 		{
 			emu_ctrl_nvm_sq_submit(&pQP->sq);
 		}
+		BAM_EMU_DEV_DBG_PRINT4(verbose, "emu_model_agg_sq_enqueue(pCmd=%p qidx = %d cid = 0x%04x sq_tail = 0x%04x)\n", pCmd, qidx, ((pCmd->dword[0] >> 16) & 0xFFFF), emu_ctrl_nvm_get_sq_tail(&pQP->sq));
 
 
 	}
@@ -497,8 +515,6 @@ __device__ inline storage_next_emuluator_context * emu_model_aggregation_cull(ba
 
 		BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_model_latency_cull[%d](count = %d) COMPLETION cid 0x%04x\n", qidx, pAqc->count, cid);
 
-		emu_ctrl_nvm_cq_dequeue(&pQP->cq);
-
 		pAggContext = find_and_remove_agg_context_by_cid(pAqc, cid);
 
 		BAM_EMU_DEV_DBG_PRINT3(verbose, "emu_model_latency_cull[%d](%p) ContextFound cid 0x%04x\n", qidx, pAggContext, cid);
@@ -507,13 +523,29 @@ __device__ inline storage_next_emuluator_context * emu_model_aggregation_cull(ba
 
 		if(pAggContext == NULL)
 		{
-			BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_ERROR, "emu_model_latency_cull PRE-ASSERT[%d] cid 0x%04x\n", qidx,  cid);
+			BAM_EMU_DEV_DBG_PRINT3(BAM_EMU_DBGLVL_ERROR, "emu_model_latency_cull PRE-ASSERT[%d] cid 0x%04x cq_head = %d\n", qidx,  cid, emu_ctrl_nvm_get_cq_head(&pQP->cq));
 
 			emu_ctrl_nvm_walk_and_find_cq_cid(&pQP->cq, cid);
 			//agg_walk_and_find(pAqc, cid);
 			BAM_EMU_DEV_DBG_PRINT2(BAM_EMU_DBGLVL_ERROR, "emu_model_latency_cull PRE-ASSERT[%d] cid 0x%04x\n", qidx,  cid);
+#ifdef AGG_Q_CNT_CNT
+			BAM_EMU_DEV_DBG_PRINT4(BAM_EMU_DBGLVL_ERROR, "emu_model_latency_cull PRE-ASSERT[%d] cid 0x%04x req = %d resp = %d\n", qidx,  cid, pAqc->req[cid],0);
+#endif
+
 		}
+		else
+		{
+			//debug
+			pCpl->dword[2] = 0xB0000000 | pCpl->dword[3];
+			pCpl->dword[3] = (pCpl->dword[3] & 0xFFFF0000);
+
+		}
+
 		BAM_EMU_DEVICE_ASSERT(pAggContext);
+
+		emu_ctrl_nvm_cq_dequeue(&pQP->cq);
+
+
 
 		
 
